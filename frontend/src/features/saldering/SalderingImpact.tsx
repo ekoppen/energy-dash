@@ -48,8 +48,8 @@ export default function SalderingImpact({
   defaultPriceFeedIn = 0.06,
   initial, onChange, initialCsvHours, onCsv,
 }: SalderingImpactProps) {
-  const [priceImport, setPriceImport] = useState(initial?.priceImport ?? defaultPriceImport);
-  const [priceFeedIn, setPriceFeedIn] = useState(initial?.priceFeedIn ?? defaultPriceFeedIn);
+  const [priceImport, setPriceImport] = useState(defaultPriceImport);
+  const [priceFeedIn, setPriceFeedIn] = useState(defaultPriceFeedIn);
   const [exportYear, setExportYear] = useState(initial?.exportYear ?? 4500);
   const [importYear, setImportYear] = useState(initial?.importYear ?? 3500);
   const [capacity, setCapacity] = useState(initial?.capacity ?? 10);
@@ -59,8 +59,8 @@ export default function SalderingImpact({
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    onChange?.({ priceImport, priceFeedIn, exportYear, importYear, capacity, roundTrip, shiftPct });
-  }, [priceImport, priceFeedIn, exportYear, importYear, capacity, roundTrip, shiftPct]);
+    onChange?.({ exportYear, importYear, capacity, roundTrip, shiftPct });
+  }, [exportYear, importYear, capacity, roundTrip, shiftPct]);
 
   const effectiveHours = liveHours ?? csvHours;
   const usingReal = !!effectiveHours && effectiveHours.length > 24;

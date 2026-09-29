@@ -3,7 +3,7 @@
 import { APENKAAS_API, authFetch } from "./auth";
 
 export interface AdviesWaarden {
-  priceImport: number; priceFeedIn: number; exportYear: number; importYear: number;
+  exportYear: number; importYear: number;
   capacity: number; roundTrip: number; shiftPct: number; saldering: "nu" | "af2027";
   accuPrijs: number; levensduur: number;
 }
@@ -38,6 +38,10 @@ export function laadInstellingen() {
   return bezig;
 }
 
-export async function bewaarInstellingen(id: string, data: Instellingen): Promise<void> {
-  await ok(await authFetch(`${DOCS}/${id}`, { method: "PATCH", headers: JSON_HEADERS, body: JSON.stringify({ data }) }));
+// Elke pagina schrijft alleen haar eigen deel: we laden eerst de actuele versie
+// en leggen daar alleen `deel` overheen, zodat Instellingen en Advies elkaars
+// sleutels niet met een oude kopie overschrijven.
+export async function bewaarInstellingen(id: string, deel: Partial<Instellingen>): Promise<void> {
+  const { data } = await laad();
+  await ok(await authFetch(`${DOCS}/${id}`, { method: "PATCH", headers: JSON_HEADERS, body: JSON.stringify({ data: { ...data, ...deel } }) }));
 }

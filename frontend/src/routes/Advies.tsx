@@ -19,6 +19,7 @@ export default function Advies() {
   const [melding, setMelding] = useState<string | null>(null);
   const [tab, setTab] = useState<"saldering" | "accu">("saldering");
   const timer = useRef<ReturnType<typeof setTimeout>>();
+  const pending = useRef<{ id: string; advies: Partial<AdviesWaarden> } | null>(null);
   const docRef = useRef(doc);
   docRef.current = doc;
 
@@ -30,7 +31,13 @@ export default function Advies() {
       laadInstellingen().then(setDoc).catch(() => setMelding("Instellingen konden niet geladen worden; wijzigingen worden niet bewaard.")),
       laadCsv().then((t) => t && setCsvHours(parseHourCsv(t))).catch(() => {}),
     ]).finally(() => setKlaar(true));
-    return () => clearTimeout(timer.current);
+    return () => {
+      // Nog niet bewaarde wijziging niet weggooien maar meteen wegschrijven.
+      clearTimeout(timer.current);
+      const wacht = pending.current;
+      pending.current = null;
+      if (wacht) bewaarInstellingen(wacht.id, { advies: wacht.advies }).catch(() => {});
+    };
   }, []);
 
   const onChange = (w: Partial<AdviesWaarden>) => {
@@ -39,8 +46,10 @@ export default function Advies() {
     const volgende = { ...huidig, data: { ...huidig.data, advies: { ...huidig.data.advies, ...w } } };
     setDoc(volgende);
     clearTimeout(timer.current);
+    pending.current = { id: volgende.id, advies: volgende.data.advies };
     timer.current = setTimeout(() => {
-      bewaarInstellingen(volgende.id, volgende.data).catch(() => setMelding("Opslaan mislukt — probeer het later opnieuw."));
+      pending.current = null;
+      bewaarInstellingen(volgende.id, { advies: volgende.data.advies }).catch(() => setMelding("Opslaan mislukt — probeer het later opnieuw."));
     }, BEWAAR_VERTRAGING_MS);
   };
 

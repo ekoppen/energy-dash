@@ -22,11 +22,16 @@ export async function laadCsv(): Promise<string | null> {
   return bestand.ok ? bestand.text() : null;
 }
 
+const verwijder = (id: string) => authFetch(`${APENKAAS_API}/storage/files/${id}`, { method: "DELETE" });
+
+// Eerst uploaden, pas daarna de oude bestanden weghalen: een mislukte upload
+// mag de vorige CSV niet kosten.
 export async function bewaarCsv(text: string | null): Promise<void> {
-  for (const f of await lijst()) {
-    await authFetch(`${APENKAAS_API}/storage/files/${f.id}`, { method: "DELETE" });
+  const oud = await lijst();
+  if (text === null) {
+    for (const f of oud) await verwijder(f.id);
+    return;
   }
-  if (text === null) return;
   const blob = new Blob([text], { type: "text/csv" });
   const r = await authFetch(`${APENKAAS_API}/storage/buckets/${BUCKET}/files`, {
     method: "POST",
@@ -34,10 +39,13 @@ export async function bewaarCsv(text: string | null): Promise<void> {
     body: JSON.stringify({ bestandsnaam: "uurdata.csv", mimeType: "text/csv", grootte: blob.size }),
   });
   if (!r.ok) throw new Error(`CSV opslaan mislukt (${r.status})`);
-  const { uploadUrl, fields } = await r.json();
+  const { id, uploadUrl, fields } = await r.json();
   const form = new FormData();
   for (const [k, v] of Object.entries(fields as Record<string, string>)) form.append(k, v);
   form.append("file", blob);
-  const up = await fetch(uploadUrl, { method: "POST", body: form });
-  if (!up.ok) throw new Error(`CSV uploaden mislukt (${up.status})`);
+  let up: Response;
+  try { up = await fetch(uploadUrl, { method: "POST", body: form }); }
+  catch { await verwijder(id).catch(() => {}); throw new Error("CSV uploaden mislukt (opslag niet bereikbaar)"); }
+  if (!up.ok) { await verwijder(id).catch(() => {}); throw new Error(`CSV uploaden mislukt (${up.status})`); }
+  for (const f of oud) await verwijder(f.id);
 }

@@ -31,8 +31,8 @@ export default function AccuSimulatie({
   liveHours, liveHoursSpan, defaultPriceImport = 0.2544, defaultPriceFeedIn = 0.06,
   initial, onChange, initialCsvHours, onCsv,
 }: AccuSimulatieProps) {
-  const [priceImport, setPriceImport] = useState(initial?.priceImport ?? defaultPriceImport);
-  const [priceFeedIn, setPriceFeedIn] = useState(initial?.priceFeedIn ?? defaultPriceFeedIn);
+  const [priceImport, setPriceImport] = useState(defaultPriceImport);
+  const [priceFeedIn, setPriceFeedIn] = useState(defaultPriceFeedIn);
   const [saldering, setSaldering] = useState<"nu" | "af2027">(initial?.saldering ?? "af2027");
   const [exportYear, setExportYear] = useState(initial?.exportYear ?? 4500);
   const [importYear, setImportYear] = useState(initial?.importYear ?? 3500);
@@ -44,8 +44,8 @@ export default function AccuSimulatie({
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    onChange?.({ priceImport, priceFeedIn, saldering, exportYear, importYear, capacity, roundTrip, accuPrijs: price, levensduur: lifespan });
-  }, [priceImport, priceFeedIn, saldering, exportYear, importYear, capacity, roundTrip, price, lifespan]);
+    onChange?.({ saldering, exportYear, importYear, capacity, roundTrip, accuPrijs: price, levensduur: lifespan });
+  }, [saldering, exportYear, importYear, capacity, roundTrip, price, lifespan]);
 
   const effectiveHours = liveHours ?? csvHours;
   const usingReal = !!effectiveHours && effectiveHours.length > 24;

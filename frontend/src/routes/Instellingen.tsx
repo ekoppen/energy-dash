@@ -27,7 +27,8 @@ export default function Instellingen() {
 
   const bewaarTarieven = async () => {
     if (!doc) return;
-    try { await bewaarInstellingen(doc.id, doc.data); setTarievenStatus("Opgeslagen ✓"); }
+    const { tarief_piek, tarief_dal, tarief_teruglevering } = doc.data;
+    try { await bewaarInstellingen(doc.id, { tarief_piek, tarief_dal, tarief_teruglevering }); setTarievenStatus("Opgeslagen ✓"); }
     catch (e) { setTarievenStatus(melding(e)); }
   };
 

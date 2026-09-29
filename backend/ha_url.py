@@ -26,6 +26,11 @@ class VeiligDoel(NamedTuple):
     ip: str | None  # goedgekeurd IP om mee te verbinden; None = host in allowlist
 
 
+def _ascii_host(host: str) -> str:
+    """Internationale hostnaam → punycode (zoals DNS en de Host-header die verwachten)."""
+    return host.encode("idna").decode("ascii")
+
+
 def _resolve(host: str) -> list[str]:
     return [info[4][0] for info in socket.getaddrinfo(host, None)]
 
@@ -35,7 +40,11 @@ def check_ha_url(url: str, allow_private: set[str], resolve=_resolve) -> VeiligD
     parts = urlsplit(url)
     if parts.scheme not in ("http", "https") or not parts.hostname:
         raise UrlNietToegestaan("Gebruik een http(s)-adres, bv. https://jouw-ha.example.nl")
-    host = parts.hostname.lower()
+    try:
+        parts.port  # gooit ValueError bij een ongeldige poort, bv. :99999
+        host = _ascii_host(parts.hostname.lower())
+    except (ValueError, UnicodeError):
+        raise UrlNietToegestaan("Ongeldige hostnaam of poort")
     if host in allow_private:
         return VeiligDoel(url.rstrip("/"), None)
     try:
@@ -59,7 +68,7 @@ def gepind_adres(doel: VeiligDoel) -> tuple[str, str, str]:
     en TLS-servernaam blijven de hostnaam, zodat HA en het certificaat kloppen.
     """
     parts = urlsplit(doel.url)
-    naam = parts.hostname or ""
+    naam = _ascii_host(parts.hostname or "")
     naam_in_url = f"[{naam}]" if ":" in naam else naam
     poort = f":{parts.port}" if parts.port else ""
     host_header = naam_in_url + poort

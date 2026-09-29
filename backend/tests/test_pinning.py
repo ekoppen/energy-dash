@@ -39,7 +39,7 @@ def test_ha_get_verbindt_met_gepind_ip_en_houdt_hostnaam():
     resultaat, verzoek = asyncio.run(run())
     assert resultaat == []
     assert verzoek.startswith("get /api/states ")
-    assert f"host: ha.invalid:" in verzoek
+    assert "host: ha.invalid:" in verzoek
 
 
 def test_websocket_verbindt_met_gepind_ip_en_houdt_hostnaam():

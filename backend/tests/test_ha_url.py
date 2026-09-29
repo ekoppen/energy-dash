@@ -64,3 +64,14 @@ def test_gepind_adres_https_ipv6_en_userinfo_weg():
 def test_gepind_adres_zonder_pin_ongewijzigd():
     assert gepind_adres(VeiligDoel("http://192.168.178.50:8123", None)) == (
         "http://192.168.178.50:8123", "192.168.178.50:8123", "192.168.178.50")
+
+
+def test_ongeldige_poort_geweigerd():
+    with pytest.raises(UrlNietToegestaan):
+        check_ha_url("https://ha.example.nl:99999", set(), resolver({"ha.example.nl": ["93.184.216.34"]}))
+
+
+def test_internationale_hostnaam_wordt_punycode():
+    r = resolver({"xn--h-0fa.example": ["93.184.216.34"]})
+    doel = check_ha_url("https://hä.example", set(), r)
+    assert gepind_adres(doel) == ("https://93.184.216.34", "xn--h-0fa.example", "xn--h-0fa.example")

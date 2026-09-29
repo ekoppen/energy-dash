@@ -107,7 +107,7 @@ async def _ha_get(doel: VeiligDoel, token: str, path: str):
     """
     basis, host_header, tls_naam = gepind_adres(doel)
     try:
-        async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=False, trust_env=False) as client:
             r = await client.get(
                 f"{basis}{path}",
                 headers={"Authorization": f"Bearer {token}", "Host": host_header},

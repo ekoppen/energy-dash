@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import AccuSimulatie from "../features/accu/AccuSimulatie";
 import SalderingImpact from "../features/saldering/SalderingImpact";
 import type { HourRecord } from "../features/accu/battery-model";
-import { api, ConfigData } from "../api";
+import { api } from "../api";
 
 // Advies-dashboard: hosts de saldering-impact analyse en de accu-simulatie.
 // Probeert echte uurdata + tarieven uit de backend te halen; lukt dat niet
@@ -11,11 +11,9 @@ import { api, ConfigData } from "../api";
 
 export default function Advies() {
   const [hours, setHours] = useState<HourRecord[] | undefined>(undefined);
-  const [cfg, setCfg] = useState<ConfigData | undefined>(undefined);
   const [tab, setTab] = useState<"saldering" | "accu">("saldering");
 
   useEffect(() => {
-    api.config().then(setCfg).catch(() => {});
     api.hours(365).then((h) => {
       if (Array.isArray(h) && h.length > 24) setHours(h);
     }).catch(() => {
@@ -31,8 +29,8 @@ export default function Advies() {
     fontWeight: 600, fontSize: 13.5, fontFamily: "'Inter', system-ui, sans-serif",
   });
 
-  const pi = cfg?.tarief_piek ?? 0.2544;
-  const pf = cfg?.tarief_teruglevering ?? 0.06;
+  const pi = 0.2544;
+  const pf = 0.06;
 
   return (
     <div>

@@ -43,7 +43,6 @@ export default function Overzicht() {
               color={teruglevert ? C.export : C.import}
               hint={teruglevert ? "je levert terug 🟢" : "je neemt af 🔴"} />
             <Card label="Actief tarief" value={now.actief_tarief === "dal" ? "Dal" : "Piek"} color={C.ink} />
-            <Card label="Prijs nu" value={euro(now.prijs_kwh)} color={C.accent} hint="€/kWh" />
           </div>
         )}
 

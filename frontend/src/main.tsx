@@ -3,8 +3,13 @@ import ReactDOM from "react-dom/client";
 import { createBrowserRouter, RouterProvider, Link, Outlet } from "react-router-dom";
 import Overzicht from "./routes/Overzicht";
 import Advies from "./routes/Advies";
+import Login from "./routes/Login";
+import Instellingen from "./routes/Instellingen";
+import { logout, useSessie } from "./auth";
 
 function Layout() {
+  const sessie = useSessie();
+  if (!sessie) return <Login />;
   const nav = {
     display: "flex", gap: 4, padding: "12px 20px",
     background: "#0b0f14", borderBottom: "1px solid #2a3744",
@@ -23,6 +28,8 @@ function Layout() {
       <nav style={nav}>
         <Link to="/" style={link(path === "/")}>Overzicht</Link>
         <Link to="/advies" style={link(path.startsWith("/advies"))}>Advies</Link>
+        <Link to="/instellingen" style={link(path.startsWith("/instellingen"))}>Instellingen</Link>
+        <button onClick={() => logout()} style={{ ...link(false), marginLeft: "auto", border: "none", cursor: "pointer" }}>Uitloggen</button>
       </nav>
       <Outlet />
     </div>
@@ -36,6 +43,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Overzicht /> },
       { path: "advies", element: <Advies /> },
+      { path: "instellingen", element: <Instellingen /> },
     ],
   },
 ]);

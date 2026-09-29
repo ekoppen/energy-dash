@@ -44,6 +44,10 @@ services:
         # De frontend praat met de backend via dit pad. In productie proxyt
         # nginx /api door naar de backend-service (zie nginx.conf).
         VITE_API_BASE: /api
+        VITE_APENKAAS_URL: ${VITE_APENKAAS_URL}
+        VITE_APENKAAS_TENANT_ID: ${VITE_APENKAAS_TENANT_ID}
+        VITE_APENKAAS_INSTELLINGEN_COLLECTION_ID: ${VITE_APENKAAS_INSTELLINGEN_COLLECTION_ID}
+        VITE_APENKAAS_UURDATA_BUCKET_ID: ${VITE_APENKAAS_UURDATA_BUCKET_ID}
     image: energie-dashboard-frontend:latest
     restart: unless-stopped
     depends_on:

@@ -1,5 +1,6 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { HourRecord, buildTypicalYear, simulateShifted, parseHourCsv } from "./battery-model";
+import type { AdviesWaarden } from "../../instellingen";
 
 // Accu-rendementsanalyse. Rekenlogica in battery-model.ts; hier UI + state.
 // Geef optioneel `liveHours` mee (echte HA-uurdata via backend) voor de
@@ -10,6 +11,10 @@ export interface AccuSimulatieProps {
   liveHoursSpan?: number;
   defaultPriceImport?: number;
   defaultPriceFeedIn?: number;
+  initial?: Partial<AdviesWaarden>;
+  onChange?: (w: Partial<AdviesWaarden>) => void;
+  initialCsvHours?: HourRecord[] | null;
+  onCsv?: (text: string | null) => void;
 }
 
 const C = {
@@ -24,18 +29,23 @@ const kwh = (n: number) => Math.round(n).toLocaleString("nl-NL") + " kWh";
 
 export default function AccuSimulatie({
   liveHours, liveHoursSpan, defaultPriceImport = 0.2544, defaultPriceFeedIn = 0.06,
+  initial, onChange, initialCsvHours, onCsv,
 }: AccuSimulatieProps) {
-  const [priceImport, setPriceImport] = useState(defaultPriceImport);
-  const [priceFeedIn, setPriceFeedIn] = useState(defaultPriceFeedIn);
-  const [saldering, setSaldering] = useState<"nu" | "af2027">("af2027");
-  const [exportYear, setExportYear] = useState(4500);
-  const [importYear, setImportYear] = useState(3500);
-  const [capacity, setCapacity] = useState(10);
-  const [roundTrip, setRoundTrip] = useState(90);
-  const [price, setPrice] = useState(4500);
-  const [lifespan, setLifespan] = useState(12);
-  const [csvHours, setCsvHours] = useState<HourRecord[] | null>(null);
+  const [priceImport, setPriceImport] = useState(initial?.priceImport ?? defaultPriceImport);
+  const [priceFeedIn, setPriceFeedIn] = useState(initial?.priceFeedIn ?? defaultPriceFeedIn);
+  const [saldering, setSaldering] = useState<"nu" | "af2027">(initial?.saldering ?? "af2027");
+  const [exportYear, setExportYear] = useState(initial?.exportYear ?? 4500);
+  const [importYear, setImportYear] = useState(initial?.importYear ?? 3500);
+  const [capacity, setCapacity] = useState(initial?.capacity ?? 10);
+  const [roundTrip, setRoundTrip] = useState(initial?.roundTrip ?? 90);
+  const [price, setPrice] = useState(initial?.accuPrijs ?? 4500);
+  const [lifespan, setLifespan] = useState(initial?.levensduur ?? 12);
+  const [csvHours, setCsvHours] = useState<HourRecord[] | null>(initialCsvHours ?? null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    onChange?.({ priceImport, priceFeedIn, saldering, exportYear, importYear, capacity, roundTrip, accuPrijs: price, levensduur: lifespan });
+  }, [priceImport, priceFeedIn, saldering, exportYear, importYear, capacity, roundTrip, price, lifespan]);
 
   const effectiveHours = liveHours ?? csvHours;
   const usingReal = !!effectiveHours && effectiveHours.length > 24;
@@ -70,7 +80,7 @@ export default function AccuSimulatie({
     const reader = new FileReader();
     reader.onload = () => {
       const parsed = parseHourCsv(String(reader.result));
-      if (parsed.length > 24) setCsvHours(parsed);
+      if (parsed.length > 24) { setCsvHours(parsed); onCsv?.(String(reader.result)); }
       else alert("Kon niet genoeg uurregels lezen (2 kolommen: verbruik, teruglevering).");
     };
     reader.readAsText(f);
@@ -126,7 +136,7 @@ export default function AccuSimulatie({
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={() => fileRef.current?.click()} style={{ background: C.accent, color: "#1a1205", border: "none", borderRadius: 9, padding: "10px 16px", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>CSV inladen</button>
-              {csvHours && <button onClick={() => setCsvHours(null)} style={{ background: "transparent", color: C.sub, border: `1px solid ${C.line}`, borderRadius: 9, padding: "10px 16px", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Terug</button>}
+              {csvHours && <button onClick={() => { setCsvHours(null); onCsv?.(null); }} style={{ background: "transparent", color: C.sub, border: `1px solid ${C.line}`, borderRadius: 9, padding: "10px 16px", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Terug</button>}
               <input ref={fileRef} type="file" accept=".csv,.txt" onChange={handleFile} style={{ display: "none" }} />
             </div>
           </div>

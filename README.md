@@ -22,19 +22,20 @@ CSV-upload), zodat het scherm altijd bruikbaar is.
 ## Architectuur
 
 ```
-HomeWizard P1 → Home Assistant → HA API (REST + WebSocket)
-                                     │  token blijft serverside
-                                     ▼
-                             backend (FastAPI proxy + rekenlogica)
-                                     │  schone JSON
-                                     ▼
-                             frontend (Vite + React, via nginx)
-                             /overzicht   /advies
+browser ──login/register/refresh──────────────▶ Apenkaas (tenant "energy-dash")
+browser ──instellingen, uurdata (user-JWT)────▶ Apenkaas collections/bucket
+browser ──/now /hours /koppeling (user-JWT)───▶ FastAPI-backend
+                                                  │ /me  (wie is dit?)
+                                                  │ ha_koppeling lezen (server-key)
+                                                  ▼
+                                               HA van díe gebruiker
 ```
 
-De **frontend praat alleen met de backend**, nooit direct met Home Assistant.
-Het HA-token staat uitsluitend serverside (env/secret) en de app is read-only
-richting HA.
+De **frontend praat rechtstreeks met Apenkaas voor inloggen en eigen gegevens**
+(instellingen, schuifjes, CSV's). De **FastAPI-backend** blijft de proxy naar Home
+Assistant en is de enige die HA-tokens ziet. HA-tokens staan per gebruiker in
+Apenkaas (collection `ha_koppeling`, alleen leesbaar met de server-key) en
+komen nooit in de browser.
 
 ## Stack
 
@@ -45,32 +46,29 @@ richting HA.
 
 ## Snel starten
 
+Energy-dash vereist nu Apenkaas (zelf-hosted BaaS) voor inloggen en opslag. Zie
+[`deploy/README.md`](deploy/README.md) voor de inrichting.
+
 ```bash
-cp .env.example .env      # vul HA_BASE_URL en HA_TOKEN in
+cp .env.example .env      # vul Apenkaas-gegevens in
 docker compose up --build
 ```
 
-Open **http://localhost:8080** (let op: http, niet https).
-
-> **Belangrijk:** `HA_BASE_URL` mag geen `localhost` zijn — vanuit de container
-> is dat de container zelf. Gebruik het LAN-IP van je HA-host, bv.
-> `http://192.168.1.50:8123`. Zie [`deploy/README.md`](deploy/README.md).
-
-Een long-lived token maak je in HA aan onder je profiel → "Langlevende
-toegangstokens".
+Open **http://localhost:8080** (let op: http, niet https). Je ziet het inlogscherm.
+Registreer een account, koppel je Home Assistant of upload een CSV.
 
 ## Projectstructuur
 
 ```
-backend/          FastAPI proxy + tarief-/advieslogica
-  main.py           endpoints: /health /config /now /hours
+backend/          FastAPI proxy + auth + tarief-/advieslogica
+  main.py           endpoints: /health /koppeling /now /hours
   ha_stats.py       HA recorder-statistieken via WebSocket → {imp, exp} per uur
 frontend/
-  src/routes/       Overzicht.tsx, Advies.tsx
+  src/routes/       Inloggen.tsx, Overzicht.tsx, Advies.tsx, Instellingen.tsx
   src/features/
     accu/           accu-rendementsanalyse (model + component)
     saldering/      salderingsstop-impact (model + component + tests)
-  src/api.ts        praat met de backend
+  src/api.ts        praat met Apenkaas (auth, instellingen, CSV) en de backend
 deploy/           deployment-notities (lokaal + Coolify)
 docker-compose.yml
 ```
@@ -78,10 +76,11 @@ docker-compose.yml
 ## Tests
 
 ```bash
-cd frontend && npm install && npm test
+cd backend && .venv/bin/pytest -q
+cd frontend && npm test && npm run build
 ```
 
-De rekenlogica van beide analyses (`*-model.ts`) is los getest met vitest.
+Backend: auth, URL-controle, P1-detectie. Frontend: rekenlogica en build.
 
 ## Contract & aannames
 

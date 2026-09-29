@@ -9,11 +9,10 @@ Via de console op http://192.168.178.202:3000/console:
 
 1. **Tenant aanmaken:** "energy-dash", registratie aan. Noteer het tenant-id.
 
-2. **App-sleutels aanmaken:**
-   - "energy-dash-server": niet-publiek, scopes `data:read`, `data:write`.
-     Noteer de key (wordt maar één keer getoond).
-   - "energy-dash-browser": publiek, allowed origin = frontend-URL
-     (lokaal: `http://localhost:8080`).
+2. **App-sleutel aanmaken:** "energy-dash-server": niet-publiek, scopes
+   `data:read`, `data:write`. Noteer de key (wordt maar één keer getoond).
+   Een publieke browser-sleutel is niet nodig: de frontend gebruikt alleen de
+   JWT van de ingelogde gebruiker (Apenkaas staat elke CORS-origin toe).
 
 3. **Collection "instellingen"**: geen verplichte velden, create-regel `users`.
    Noteer het id.
@@ -30,12 +29,14 @@ Via de console op http://192.168.178.202:3000/console:
    APENKAAS_TENANT_ID=<tenant-id uit stap 1>
    APENKAAS_SERVER_KEY=<key uit stap 2a>
    APENKAAS_KOPPELING_COLLECTION_ID=<id uit stap 4>
-   VITE_APENKAAS_URL=http://192.168.178.202:3000
+   VITE_APENKAAS_URL=http://192.168.178.202:3000   # Apenkaas zoals de BROWSER hem ziet
    VITE_APENKAAS_TENANT_ID=<tenant-id>
    VITE_APENKAAS_INSTELLINGEN_COLLECTION_ID=<id uit stap 3>
    VITE_APENKAAS_UURDATA_BUCKET_ID=<id uit stap 5>
    HA_PRIVE_TOEGESTAAN=192.168.1.1     # LAN-IP van je Home Assistant
    ```
+   De CSV-upload en -download gaan via presigned URL's rechtstreeks naar de
+   opslag (MinIO) van Apenkaas: die moet dus ook vanuit de browser bereikbaar zijn.
 
 ## Lokaal draaien
 ```bash
@@ -51,8 +52,10 @@ Voor je eigen HA op het LAN voeg je het adres toe aan `HA_PRIVE_TOEGESTAAN`:
 ```
 HA_PRIVE_TOEGESTAAN=192.168.1.50,192.168.1.51
 ```
-(komma-gescheiden, geen spaties). Zo kunt je gebruikers hun LAN-HA koppelen
-zonder dat ze een buitenip hoeven te gebruiken.
+(komma-gescheiden, geen spaties).
+
+Let op: elke geregistreerde gebruiker kan de backend daarmee laten verbinden met
+die host, op elke poort. Zet er dus alleen adressen in die je gebruikers mogen bereiken.
 
 ## Coolify (jouw homelab)
 - Nieuw resource → Docker Compose → wijs naar dit `docker-compose.yml`.
@@ -62,16 +65,17 @@ zonder dat ze een buitenip hoeven te gebruiken.
 - Laat Coolify/Traefik de externe poort + TLS afhandelen; je kunt de `ports:`
   mapping van de frontend dan weghalen en op het Traefik-netwerk aansluiten.
 - Zet `CORS_ORIGINS` op de publieke frontend-URL; `VITE_APENKAAS_URL` wijst naar
-  de Apenkaas-instance die je gebruikers bereiken (localhost voor test, extern
-  IP voor productie).
+  de Apenkaas-instance zoals de browser van je gebruikers hem bereikt
+  (bv. `http://192.168.178.202:3000`, of in productie de publieke URL).
 
 ## Veiligheid
 - **Apenkaas server-key** alleen serverside (backend). De frontend gebruikt
-  aparte publieke credentials.
+  de JWT van de ingelogde gebruiker (geen app-sleutel).
 - **HA-tokens** liggen per gebruiker in Apenkaas en verlaten nooit de backend;
   gebruikers stellen hun URL in, maar zien het token nooit.
 - **SSRF-bescherming:** backend weigert standaard privé-adressen; alleen
-  adressen in `HA_PRIVE_TOEGESTAAN` mogen naar het LAN. Geen open redirects.
+  adressen in `HA_PRIVE_TOEGESTAAN` mogen naar het LAN. De backend volgt geen redirects (HTTP en WebSocket); een
+  redirect van een HA-URL wordt als fout afgewezen.
 - `.env` en secrets nooit in git (zie .gitignore).
 
 ## Uurdata: het /hours endpoint
@@ -81,12 +85,16 @@ en export t1+t2 tot één `{imp, exp}`-reeks per uur — dat voedt zowel de accu
 de saldering-analyse.
 
 Aandachtspunten:
-- De WebSocket loopt naar `ws(s)://<ha-host>:8123/api/websocket`. `HA_BASE_URL`
-  moet dus vanuit de container bereikbaar zijn (LAN-IP, geen localhost).
+- De WebSocket loopt naar `ws(s)://<ha-adres>/api/websocket`, met het HA-adres
+  van de gebruiker (Instellingen). Dat moet vanuit de container bereikbaar zijn
+  (LAN-IP op `HA_PRIVE_TOEGESTAAN`, geen localhost). Limieten: 20 s per stap,
+  berichten max 16 MiB, `days` 1 t/m 730. Fouten komen als 502 `ha_onbereikbaar`.
 - De recorder moet genoeg historie hebben. Standaard bewaart HA statistieken
   lang (die worden niet gepurged zoals gewone states), dus ~een jaar terug werkt
   meestal. Heb je pas net gemeten, dan is er navenant minder data.
-- Test los: `GET http://<host>:8000/hours?days=30` (via de frontend: /api/hours).
+- Test los: `GET /api/hours?days=30` via de frontend (nginx), met een
+  `Authorization: Bearer <access-token>` van een ingelogde gebruiker. De backend
+  zelf (poort 8000) is niet extern blootgesteld.
 
 ## Health & herstart
 - Backend heeft een `/health` endpoint; compose gebruikt dat als healthcheck.

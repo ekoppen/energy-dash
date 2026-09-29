@@ -64,11 +64,11 @@ backend/          FastAPI proxy + auth + tarief-/advieslogica
   main.py           endpoints: /health /koppeling /now /hours
   ha_stats.py       HA recorder-statistieken via WebSocket → {imp, exp} per uur
 frontend/
-  src/routes/       Inloggen.tsx, Overzicht.tsx, Advies.tsx, Instellingen.tsx
+  src/routes/       Login.tsx, Overzicht.tsx, Advies.tsx, Instellingen.tsx
   src/features/
     accu/           accu-rendementsanalyse (model + component)
     saldering/      salderingsstop-impact (model + component + tests)
-  src/api.ts        praat met Apenkaas (auth, instellingen, CSV) en de backend
+  src/api.ts        praat met de backend; auth.ts/instellingen.ts/uurdata.ts met Apenkaas
 deploy/           deployment-notities (lokaal + Coolify)
 docker-compose.yml
 ```
@@ -86,7 +86,7 @@ Backend: auth, URL-controle, P1-detectie. Frontend: rekenlogica en build.
 
 Gebouwd rond een Coolblue "3 jaar Zeker" dubbeltariefcontract (piek 0,254390 /
 dal 0,233699 / teruglevering 0,060000 €/kWh, geen aparte terugleverkosten).
-Tarieven staan als env-variabelen en zijn aanpasbaar. De salderingsregeling
+Tarieven stel je per gebruiker in bij Instellingen (dit contract is de startwaarde). De salderingsregeling
 stopt per 1 januari 2027 — dat scenario is de kern van de advieslogica.
 
 ## Beperking

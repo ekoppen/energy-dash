@@ -3,8 +3,9 @@
 # Twee services:
 #   backend  — FastAPI proxy naar Home Assistant. Houdt het HA-token serverside,
 #              rekent tarieven/advies, en levert schone JSON aan de frontend.
-#   frontend — de webapp (Vite build), geserveerd door nginx, praat alleen met
-#              de backend (nooit direct met HA).
+#   frontend — de webapp (Vite build), geserveerd door nginx. De browser praat
+#              met de backend (/api) en rechtstreeks met Apenkaas (inloggen,
+#              instellingen, CSV); nooit direct met HA.
 #
 # HA-tokens staan per gebruiker in Apenkaas; de server-key komt uit .env /
 # Coolify secrets (deployment). Zie .env.example.

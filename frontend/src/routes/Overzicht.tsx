@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { api, NowData } from "../api";
+import { Link } from "react-router-dom";
+import { api, ApiFout, NowData } from "../api";
+import { Instellingen, laadInstellingen, STANDAARD } from "../instellingen";
 
 // Overzichtsdashboard (scherm 1). Toont de live situatie uit de backend.
 // Dit is een startpunt: fase 2 van docs/PLAN.md breidt dit uit met dag-/
@@ -15,15 +17,22 @@ const euro = (n: number) => "€ " + n.toLocaleString("nl-NL", { minimumFraction
 export default function Overzicht() {
   const [now, setNow] = useState<NowData | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [tar, setTar] = useState<Instellingen>(STANDAARD);
+  const [geenKoppeling, setGeenKoppeling] = useState(false);
 
   useEffect(() => {
-    const load = () => api.now().then(setNow).catch((e) => setErr(String(e)));
+    laadInstellingen().then((d) => setTar(d.data)).catch(() => {});
+    const load = () => api.now().then((n) => { setNow(n); setErr(null); }).catch((e) => {
+      if (e instanceof ApiFout && e.code === "geen_koppeling") setGeenKoppeling(true);
+      else setErr(e instanceof Error ? e.message : String(e));
+    });
     load();
     const t = setInterval(load, 10000); // elke 10s verversen
     return () => clearInterval(t);
   }, []);
 
   const teruglevert = now ? now.vermogen_w < 0 : false;
+  const prijs = now ? (now.actief_tarief === "dal" ? tar.tarief_dal : tar.tarief_piek) : 0;
 
   return (
     <div style={{ background: C.bg, minHeight: "100%", padding: "32px 20px", fontFamily: "'Inter', system-ui, sans-serif", color: C.ink }}>
@@ -33,7 +42,14 @@ export default function Overzicht() {
 
         {err && (
           <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: 16, color: C.sub, fontSize: 13 }}>
-            Kon geen live data ophalen ({err}). Draait de backend en klopt HA_BASE_URL / HA_TOKEN?
+            Kon geen live data ophalen ({err}).
+          </div>
+        )}
+
+        {geenKoppeling && (
+          <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: 16, color: C.sub, fontSize: 14 }}>
+            Nog geen Home Assistant gekoppeld. <Link to="/instellingen" style={{ color: C.accent }}>Koppel je HA</Link> voor live data,
+            of bekijk <Link to="/advies" style={{ color: C.accent }}>Advies</Link> op basis van je jaartotalen.
           </div>
         )}
 
@@ -43,10 +59,11 @@ export default function Overzicht() {
               color={teruglevert ? C.export : C.import}
               hint={teruglevert ? "je levert terug 🟢" : "je neemt af 🔴"} />
             <Card label="Actief tarief" value={now.actief_tarief === "dal" ? "Dal" : "Piek"} color={C.ink} />
+            <Card label="Prijs nu" value={euro(prijs)} color={C.accent} hint="per kWh, jouw tarief" />
           </div>
         )}
 
-        {!now && !err && <div style={{ color: C.dim, fontSize: 14 }}>Laden…</div>}
+        {!now && !err && !geenKoppeling && <div style={{ color: C.dim, fontSize: 14 }}>Laden…</div>}
       </div>
     </div>
   );

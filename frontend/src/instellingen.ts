@@ -1,0 +1,43 @@
+// instellingen.ts — één Apenkaas-document per gebruiker met tarieven en
+// schuifjes. Alleen die gebruiker mag het lezen/schrijven (standaard user:<id>).
+import { APENKAAS_API, authFetch } from "./auth";
+
+export interface AdviesWaarden {
+  priceImport: number; priceFeedIn: number; exportYear: number; importYear: number;
+  capacity: number; roundTrip: number; shiftPct: number; saldering: "nu" | "af2027";
+  accuPrijs: number; levensduur: number;
+}
+export interface Instellingen {
+  tarief_piek: number; tarief_dal: number; tarief_teruglevering: number;
+  advies: Partial<AdviesWaarden>;
+}
+
+export const STANDAARD: Instellingen = { tarief_piek: 0.25439, tarief_dal: 0.233699, tarief_teruglevering: 0.06, advies: {} };
+
+const DOCS = `${APENKAAS_API}/collections/${import.meta.env.VITE_APENKAAS_INSTELLINGEN_COLLECTION_ID}/documents`;
+const JSON_HEADERS = { "Content-Type": "application/json" };
+
+async function ok(r: Response) {
+  if (!r.ok) throw new Error(`Apenkaas gaf ${r.status} bij instellingen`);
+  return r.json();
+}
+
+async function laad(): Promise<{ id: string; data: Instellingen }> {
+  const lijst = await ok(await authFetch(`${DOCS}?limit=1`));
+  const doc = lijst.documents[0];
+  if (doc) return { id: doc.id, data: { ...STANDAARD, ...doc.data } };
+  const nieuw = await ok(await authFetch(DOCS, { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ data: STANDAARD }) }));
+  return { id: nieuw.id, data: STANDAARD };
+}
+
+// Gelijktijdige aanroepen (StrictMode draait effects dubbel) delen één verzoek,
+// anders ontstaan bij de eerste login twee documenten.
+let bezig: Promise<{ id: string; data: Instellingen }> | null = null;
+export function laadInstellingen() {
+  bezig ??= laad().finally(() => { bezig = null; });
+  return bezig;
+}
+
+export async function bewaarInstellingen(id: string, data: Instellingen): Promise<void> {
+  await ok(await authFetch(`${DOCS}/${id}`, { method: "PATCH", headers: JSON_HEADERS, body: JSON.stringify({ data }) }));
+}

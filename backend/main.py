@@ -13,14 +13,14 @@ import logging
 from contextlib import asynccontextmanager
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
 from apenkaas import Apenkaas, ApenkaasFout, NietIngelogd
-from ha_stats import HAStatsError, combine_import_export, fetch_hourly_statistics
+from ha_stats import combine_import_export, fetch_hourly_statistics
 from ha_url import UrlNietToegestaan, check_ha_url
 from p1 import GeenP1Gevonden, find_p1_entities
 
@@ -177,7 +177,7 @@ async def now(k: dict = Depends(koppeling_van)) -> dict:
 
 
 @app.get("/hours")
-async def hours(days: int = 365, k: dict = Depends(koppeling_van)) -> list[dict]:
+async def hours(days: int = Query(365, ge=1, le=730), k: dict = Depends(koppeling_van)) -> list[dict]:
     """Uurdata {imp, exp} uit de HA recorder-statistieken van de gebruiker."""
     url = await _veilige_url(k["ha_url"])
     e = k["entities"]
@@ -185,8 +185,9 @@ async def hours(days: int = 365, k: dict = Depends(koppeling_van)) -> list[dict]
     export_ids = [e["export_t1"], e["export_t2"]]
     try:
         stats = await fetch_hourly_statistics(url, k["ha_token"], import_ids + export_ids, days)
-    except HAStatsError as err:
-        raise fout(502, "ha_onbereikbaar", f"Uur-statistieken ophalen mislukt: {err}")
+    except Exception as err:  # ook OSError, timeouts, redirects: nooit HA-tekst terug naar de gebruiker
+        log.warning("uurstatistieken mislukt: %r", err)
+        raise fout(502, "ha_onbereikbaar", "Uur-statistieken ophalen mislukt")
     records = combine_import_export(stats, import_ids, export_ids)
     if not records:
         raise fout(422, "geen_uurdata", "Home Assistant heeft (nog) geen uur-statistieken voor de P1-meter")

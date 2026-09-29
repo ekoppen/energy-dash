@@ -12,12 +12,30 @@ met een 'change'-veld, veel lichter en preciezer.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 
 
 class HAStatsError(Exception):
     pass
+
+
+# 730 dagen x 4 reeksen x ~120 B per uurbucket is ~8,4 MB; 16 MiB geeft ruimte.
+MAX_BERICHT_BYTES = 16 * 1024 * 1024
+TIMEOUT_S = 20  # connect en elke recv
+
+
+def _client_zonder_redirects():
+    # websockets.connect is in 13.1 de legacy Connect: die volgt tot
+    # MAX_REDIRECTS_ALLOWED (10) redirects. Met 1 poging wordt een redirect
+    # nooit gevolgd (er volgt geen tweede verbinding, wel SecurityError).
+    from websockets.legacy.client import Connect
+
+    class GeenRedirects(Connect):
+        MAX_REDIRECTS_ALLOWED = 1
+
+    return GeenRedirects
 
 
 def _ws_url(base_url: str) -> str:
@@ -40,15 +58,19 @@ async def fetch_hourly_statistics(
     ws_url = _ws_url(base_url)
     start = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
 
-    import websockets  # lazy import; staat in requirements
+    async def recv():
+        async with asyncio.timeout(TIMEOUT_S):
+            return json.loads(await ws.recv())
 
-    async with websockets.connect(ws_url, max_size=None) as ws:
+    async with _client_zonder_redirects()(
+        ws_url, max_size=MAX_BERICHT_BYTES, open_timeout=TIMEOUT_S, close_timeout=TIMEOUT_S
+    ) as ws:
         # 1) auth handshake
-        hello = json.loads(await ws.recv())  # {"type": "auth_required", ...}
+        hello = await recv()  # {"type": "auth_required", ...}
         if hello.get("type") != "auth_required":
-            raise HAStatsError(f"Onverwacht bericht: {hello.get('type')}")
+            raise HAStatsError("Onverwacht bericht bij verbinden")
         await ws.send(json.dumps({"type": "auth", "access_token": token}))
-        auth_res = json.loads(await ws.recv())
+        auth_res = await recv()
         if auth_res.get("type") != "auth_ok":
             raise HAStatsError("Auth mislukt — controleer HA_TOKEN.")
 
@@ -65,10 +87,10 @@ async def fetch_hourly_statistics(
 
         # antwoord kan meerdere frames zijn; wacht op het frame met ons id
         while True:
-            res = json.loads(await ws.recv())
+            res = await recv()
             if res.get("id") == msg_id and res.get("type") == "result":
                 if not res.get("success", False):
-                    raise HAStatsError(f"Statistiek-fout: {res.get('error')}")
+                    raise HAStatsError("Statistiek-verzoek geweigerd")
                 return res.get("result", {})
 
 

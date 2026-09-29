@@ -1,0 +1,61 @@
+# docker-compose.yml — Energie Dashboard
+#
+# Twee services:
+#   backend  — FastAPI proxy naar Home Assistant. Houdt het HA-token serverside,
+#              rekent tarieven/advies, en levert schone JSON aan de frontend.
+#   frontend — de webapp (Vite build), geserveerd door nginx, praat alleen met
+#              de backend (nooit direct met HA).
+#
+# Het HA-token staat NOOIT in dit bestand of in het image — het komt uit .env
+# (lokaal) of uit Coolify secrets (deployment). Zie .env.example.
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: energie-dashboard-backend:latest
+    restart: unless-stopped
+    environment:
+      # Uit .env / Coolify secrets — niet hardcoden.
+      HA_BASE_URL: ${HA_BASE_URL}
+      HA_TOKEN: ${HA_TOKEN}
+      TARIEF_PIEK: ${TARIEF_PIEK:-0.254390}
+      TARIEF_DAL: ${TARIEF_DAL:-0.233699}
+      TARIEF_TERUGLEVERING: ${TARIEF_TERUGLEVERING:-0.060000}
+      # Alleen de frontend-origin mag de backend aanroepen.
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - energie
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # De frontend praat met de backend via dit pad. In productie proxyt
+        # nginx /api door naar de backend-service (zie nginx.conf).
+        VITE_API_BASE: /api
+    image: energie-dashboard-frontend:latest
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      # Host-poort 8080 → nginx in de container. Pas aan of laat Traefik/Coolify
+      # dit afhandelen bij deployment.
+      - "${FRONTEND_PORT:-8080}:80"
+    networks:
+      - energie
+
+networks:
+  energie:
+    driver: bridge

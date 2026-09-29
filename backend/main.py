@@ -1,142 +1,193 @@
 """
 main.py — FastAPI backend voor het Energie Dashboard.
 
-Rol: proxy naar Home Assistant (token blijft serverside) + tarief-/advieslogica.
-De frontend praat ALLEEN met deze backend, nooit direct met HA.
-
-Dit is een werkend skelet: /health en /config werken meteen; de HA-endpoints
-zijn gemarkeerd met TODO en moeten in Claude Code afgemaakt worden (fase 1 van
-docs/PLAN.md). Zo start de container en slaagt de health check al.
+Rol: proxy naar de Home Assistant van de ingelogde gebruiker. Inloggen en
+opslag doet Apenkaas; deze backend controleert het user-JWT via Apenkaas /me en
+leest de HA-koppeling (URL, token, P1-entities) met de server-key. Het HA-token
+gaat nooit terug naar de browser en komt nooit in de logs.
 """
 from __future__ import annotations
 
-from functools import lru_cache
+import asyncio
+import logging
+from contextlib import asynccontextmanager
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
-from ha_stats import (
-    HAStatsError,
-    fetch_hourly_statistics,
-    combine_import_export,
-)
+from apenkaas import Apenkaas, ApenkaasFout, NietIngelogd
+from ha_stats import HAStatsError, combine_import_export, fetch_hourly_statistics
+from ha_url import UrlNietToegestaan, check_ha_url
+from p1 import GeenP1Gevonden, find_p1_entities
+
+log = logging.getLogger("energy-dash")
 
 
 class Settings(BaseSettings):
-    ha_base_url: str = "http://homeassistant.local:8123"
-    ha_token: str = ""
-    tarief_piek: float = 0.254390
-    tarief_dal: float = 0.233699
-    tarief_teruglevering: float = 0.060000
+    apenkaas_url: str = "http://192.168.178.202:3000"
+    apenkaas_tenant_id: str = ""
+    apenkaas_server_key: str = ""
+    apenkaas_koppeling_collection_id: str = ""
+    ha_prive_toegestaan: str = ""
     cors_origins: str = "http://localhost:8080"
 
     class Config:
         env_file = ".env"
 
 
-@lru_cache
-def get_settings() -> Settings:
-    return Settings()
+settings = Settings()
+PRIVE_TOEGESTAAN = {h.strip().lower() for h in settings.ha_prive_toegestaan.split(",") if h.strip()}
+apenkaas = Apenkaas(settings.apenkaas_url, settings.apenkaas_tenant_id,
+                    settings.apenkaas_server_key, settings.apenkaas_koppeling_collection_id)
 
 
-settings = get_settings()
-app = FastAPI(title="Energie Dashboard API", version="0.1.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    yield
+    # Shutdown
+    await apenkaas.aclose()
 
+
+app = FastAPI(title="Energie Dashboard API", version="0.2.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
-    allow_methods=["GET"],
+    allow_methods=["GET", "PUT", "DELETE"],
     allow_headers=["*"],
 )
 
-# HomeWizard P1 entiteiten (zie reference/ha-entities.md)
-SERIAL = "3c39e72e8b26"
-E = {
-    "active_power": f"sensor.p1_meter_{SERIAL}_active_power",
-    "active_tariff": f"sensor.p1_meter_{SERIAL}_active_tariff",
-    "import_t1": f"sensor.p1_meter_{SERIAL}_total_power_import_t1",
-    "import_t2": f"sensor.p1_meter_{SERIAL}_total_power_import_t2",
-    "export_t1": f"sensor.p1_meter_{SERIAL}_total_power_export_t1",
-    "export_t2": f"sensor.p1_meter_{SERIAL}_total_power_export_t2",
-}
+
+def fout(status: int, code: str, melding: str) -> HTTPException:
+    return HTTPException(status, {"code": code, "melding": melding})
 
 
-def _ha_headers() -> dict[str, str]:
-    if not settings.ha_token:
-        raise HTTPException(500, "HA_TOKEN niet ingesteld (zie .env / secrets).")
-    return {"Authorization": f"Bearer {settings.ha_token}"}
+bearer = HTTPBearer(auto_error=False)
 
 
-async def _ha_state(entity_id: str) -> dict:
-    url = f"{settings.ha_base_url}/api/states/{entity_id}"
-    async with httpx.AsyncClient(timeout=10) as client:
-        r = await client.get(url, headers=_ha_headers())
+async def current_user(cred: HTTPAuthorizationCredentials | None = Depends(bearer)) -> str:
+    if cred is None:
+        raise fout(401, "niet_ingelogd", "Log eerst in")
+    try:
+        return await apenkaas.user_id(cred.credentials)
+    except NietIngelogd:
+        raise fout(401, "niet_ingelogd", "Je sessie is verlopen, log opnieuw in")
+    except ApenkaasFout as e:
+        log.warning("apenkaas /me mislukt: %s", e)
+        raise fout(503, "apenkaas_onbereikbaar", "Apenkaas is even niet bereikbaar")
+
+
+async def koppeling_van(uid: str = Depends(current_user)) -> dict:
+    try:
+        k = await apenkaas.get_koppeling(uid)
+    except ApenkaasFout as e:
+        log.warning("koppeling lezen mislukt user=%s: %s", uid, e)
+        raise fout(503, "apenkaas_onbereikbaar", "Apenkaas is even niet bereikbaar")
+    if k is None:
+        raise fout(404, "geen_koppeling", "Nog geen Home Assistant gekoppeld")
+    return k
+
+
+async def _veilige_url(url: str) -> str:
+    try:
+        return await asyncio.to_thread(check_ha_url, url, PRIVE_TOEGESTAAN)
+    except UrlNietToegestaan as e:
+        raise fout(422, "url_geweigerd", str(e))
+
+
+async def _ha_get(url: str, token: str, path: str):
+    """GET op de HA van de gebruiker. Geeft JSON terug; ruwe HA-antwoorden gaan nooit door."""
+    try:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:
+            r = await client.get(f"{url}{path}", headers={"Authorization": f"Bearer {token}"})
+    except httpx.HTTPError:
+        raise fout(502, "ha_onbereikbaar", "Je Home Assistant is niet bereikbaar")
+    if r.status_code in (401, 403):
+        raise fout(502, "ha_token", "Home Assistant accepteert het token niet")
     if r.status_code != 200:
-        raise HTTPException(r.status_code, f"HA-fout voor {entity_id}")
+        raise fout(502, "ha_onbereikbaar", f"Home Assistant gaf status {r.status_code}")
     return r.json()
+
+
+async def _ha_state(k: dict, entity_id: str) -> dict:
+    url = await _veilige_url(k["ha_url"])
+    return await _ha_get(url, k["ha_token"], f"/api/states/{entity_id}")
 
 
 @app.get("/health")
 def health() -> dict:
-    """Liveness check voor Docker/Coolify. Praat NIET met HA (altijd snel)."""
+    """Liveness check voor Docker/Coolify. Praat niet met HA of Apenkaas."""
     return {"status": "ok"}
 
 
-@app.get("/config")
-def config() -> dict:
-    """Tarieven die de frontend gebruikt (uit env/contract)."""
-    return {
-        "tarief_piek": settings.tarief_piek,
-        "tarief_dal": settings.tarief_dal,
-        "tarief_teruglevering": settings.tarief_teruglevering,
-    }
+class KoppelingIn(BaseModel):
+    ha_url: str = Field(min_length=1, max_length=500)
+    ha_token: str = Field(min_length=1, max_length=1000)
+
+
+@app.get("/koppeling")
+async def koppeling_status(uid: str = Depends(current_user)) -> dict:
+    try:
+        k = await apenkaas.get_koppeling(uid)
+    except ApenkaasFout:
+        raise fout(503, "apenkaas_onbereikbaar", "Apenkaas is even niet bereikbaar")
+    return {"gekoppeld": k is not None, "ha_url": k["ha_url"] if k else None}
+
+
+@app.put("/koppeling")
+async def koppeling_opslaan(body: KoppelingIn, uid: str = Depends(current_user)) -> dict:
+    url = await _veilige_url(body.ha_url)
+    states = await _ha_get(url, body.ha_token, "/api/states")
+    try:
+        entities = find_p1_entities(states if isinstance(states, list) else [])
+    except GeenP1Gevonden as e:
+        raise fout(422, "geen_p1", str(e))
+    try:
+        await apenkaas.put_koppeling(uid, {"ha_url": url, "ha_token": body.ha_token, "entities": entities})
+    except ApenkaasFout as e:
+        log.warning("koppeling opslaan mislukt user=%s: %s", uid, e)
+        raise fout(503, "apenkaas_onbereikbaar", "Apenkaas is even niet bereikbaar")
+    log.info("koppeling opgeslagen user=%s", uid)
+    return {"gekoppeld": True, "ha_url": url}
+
+
+@app.delete("/koppeling")
+async def koppeling_verwijderen(uid: str = Depends(current_user)) -> dict:
+    try:
+        await apenkaas.delete_koppeling(uid)
+    except ApenkaasFout:
+        raise fout(503, "apenkaas_onbereikbaar", "Apenkaas is even niet bereikbaar")
+    return {"gekoppeld": False}
 
 
 @app.get("/now")
-async def now() -> dict:
-    """Actuele situatie: vermogen, actief tarief, huidige prijs."""
-    power = await _ha_state(E["active_power"])
-    tariff = await _ha_state(E["active_tariff"])
-    actief = tariff["state"]
-    prijs = settings.tarief_dal if actief == "1" else settings.tarief_piek
-    return {
-        "vermogen_w": float(power["state"]),
-        "actief_tarief": "dal" if actief == "1" else "piek",
-        "prijs_kwh": prijs,
-    }
+async def now(k: dict = Depends(koppeling_van)) -> dict:
+    """Actueel vermogen en actief tarief; de prijs rekent de frontend uit."""
+    power = await _ha_state(k, k["entities"]["active_power"])
+    tariff = await _ha_state(k, k["entities"]["active_tariff"])
+    try:
+        vermogen = float(power["state"])
+    except (KeyError, TypeError, ValueError):
+        raise fout(502, "ha_onbereikbaar", "Home Assistant gaf geen geldig vermogen")
+    return {"vermogen_w": vermogen, "actief_tarief": "dal" if tariff.get("state") == "1" else "piek"}
 
 
 @app.get("/hours")
-async def hours(days: int = 365) -> list[dict]:
-    """
-    Uurdata {imp, exp} voor de accu- en saldering-features, uit de HA recorder-
-    statistieken (WebSocket). Combineert import t1+t2 en export t1+t2 per uur.
-    `days` = hoeveel dagen terug (default 365). Levert:
-        [{ "imp": <kWh dat uur>, "exp": <kWh dat uur> }, ...]
-    """
-    if not settings.ha_token:
-        raise HTTPException(500, "HA_TOKEN niet ingesteld (zie .env / secrets).")
-
-    import_ids = [E["import_t1"], E["import_t2"]]
-    export_ids = [E["export_t1"], E["export_t2"]]
-
+async def hours(days: int = 365, k: dict = Depends(koppeling_van)) -> list[dict]:
+    """Uurdata {imp, exp} uit de HA recorder-statistieken van de gebruiker."""
+    url = await _veilige_url(k["ha_url"])
+    e = k["entities"]
+    import_ids = [e["import_t1"], e["import_t2"]]
+    export_ids = [e["export_t1"], e["export_t2"]]
     try:
-        stats = await fetch_hourly_statistics(
-            settings.ha_base_url,
-            settings.ha_token,
-            import_ids + export_ids,
-            days,
-        )
-    except HAStatsError as e:
-        raise HTTPException(502, f"HA-statistieken ophalen mislukt: {e}")
-
+        stats = await fetch_hourly_statistics(url, k["ha_token"], import_ids + export_ids, days)
+    except HAStatsError as err:
+        raise fout(502, "ha_onbereikbaar", f"Uur-statistieken ophalen mislukt: {err}")
     records = combine_import_export(stats, import_ids, export_ids)
     if not records:
-        raise HTTPException(
-            404,
-            "Geen uur-statistieken gevonden. Heeft de recorder genoeg historie, "
-            "en kloppen de entiteit-id's in main.py?",
-        )
+        raise fout(422, "geen_uurdata", "Home Assistant heeft (nog) geen uur-statistieken voor de P1-meter")
     return records

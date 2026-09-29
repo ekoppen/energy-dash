@@ -71,3 +71,7 @@ class Apenkaas:
         r = await self._request("DELETE", f"{self._docs}/{user_id}", headers=self._server)
         if r.status_code not in (200, 404):
             raise ApenkaasFout(f"koppeling verwijderen gaf {r.status_code}")
+
+    async def aclose(self) -> None:
+        """Close the async HTTP client."""
+        await self._client.aclose()

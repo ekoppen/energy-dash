@@ -14,25 +14,29 @@ Via de console op http://192.168.178.202:3000/console:
    Een publieke browser-sleutel is niet nodig: de frontend gebruikt alleen de
    JWT van de ingelogde gebruiker (Apenkaas staat elke CORS-origin toe).
 
-3. **Collection "instellingen"**: geen verplichte velden, create-regel `users`.
-   Noteer het id.
+3. **Collecties en bucket aanmaken met het manifest.** `apenkaas.json` in deze
+   repo beschrijft `instellingen`, `ha_koppeling` en de bucket `uurdata`. Maak
+   in de console een tijdelijke sleutel "setup" (niet-publiek, scopes
+   `data:read`, `data:write`, `storage:read`, `storage:write`) en draai vanuit
+   de apenkaas-repo:
+   ```bash
+   APENKAAS_URL=http://192.168.178.202:3000 APENKAAS_TENANT=<tenant-id> APENKAAS_KEY=<setup-key> \
+     node scripts/push.mjs ../energy-dash/apenkaas.json
+   ```
+   Het script print de ids als `.env`-regels. Veilig om opnieuw te draaien
+   (maakt alleen aan wat ontbreekt, verwijdert nooit). Verwijder de
+   setup-sleutel daarna in de console.
 
-4. **Collection "ha_koppeling"**: create-regel leeg (alleen de server maakt aan).
-   Noteer het id.
-
-5. **Bucket "uurdata"**: create-regel `users`, max 5 MB, mimetypes `text/csv`.
-   Noteer het id.
-
-6. **Vul `.env` in** (zie `.env.example`; niet committen):
+4. **Vul `.env` in** (zie `.env.example`; niet committen):
    ```
    APENKAAS_URL=http://192.168.178.202:3000
    APENKAAS_TENANT_ID=<tenant-id uit stap 1>
-   APENKAAS_SERVER_KEY=<key uit stap 2a>
-   APENKAAS_KOPPELING_COLLECTION_ID=<id uit stap 4>
+   APENKAAS_SERVER_KEY=<key uit stap 2>
+   APENKAAS_KOPPELING_COLLECTION_ID=<uit stap 3>
    VITE_APENKAAS_URL=http://192.168.178.202:3000   # Apenkaas zoals de BROWSER hem ziet
    VITE_APENKAAS_TENANT_ID=<tenant-id>
-   VITE_APENKAAS_INSTELLINGEN_COLLECTION_ID=<id uit stap 3>
-   VITE_APENKAAS_UURDATA_BUCKET_ID=<id uit stap 5>
+   VITE_APENKAAS_INSTELLINGEN_COLLECTION_ID=<uit stap 3>
+   VITE_APENKAAS_UURDATA_BUCKET_ID=<uit stap 3>
    HA_PRIVE_TOEGESTAAN=192.168.1.1     # LAN-IP van je Home Assistant
    ```
    De CSV-upload en -download gaan via presigned URL's rechtstreeks naar de

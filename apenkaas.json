@@ -1,0 +1,31 @@
+{
+  "collections": [
+    {
+      "naam": "instellingen",
+      "schema": [
+        { "key": "tarief_piek", "type": "number" },
+        { "key": "tarief_dal", "type": "number" },
+        { "key": "tarief_teruglevering", "type": "number" }
+      ],
+      "createPermissions": ["users"],
+      "env": ["VITE_APENKAAS_INSTELLINGEN_COLLECTION_ID"]
+    },
+    {
+      "naam": "ha_koppeling",
+      "schema": [
+        { "key": "ha_url", "type": "string" }
+      ],
+      "createPermissions": [],
+      "env": ["APENKAAS_KOPPELING_COLLECTION_ID"]
+    }
+  ],
+  "buckets": [
+    {
+      "naam": "uurdata",
+      "maxBestandsgrootte": 5242880,
+      "toegestaneMimetypes": ["text/csv"],
+      "createPermissions": ["users"],
+      "env": ["VITE_APENKAAS_UURDATA_BUCKET_ID"]
+    }
+  ]
+}

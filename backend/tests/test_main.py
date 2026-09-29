@@ -3,6 +3,7 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 import main
+from ha_url import VeiligDoel
 from apenkaas import ApenkaasFout, NietIngelogd
 
 KOPPELING = {
@@ -36,7 +37,7 @@ class NepApenkaas:
 
 @pytest.fixture
 def client(monkeypatch):
-    monkeypatch.setattr(main, "check_ha_url", lambda url, allow: url.rstrip("/"))
+    monkeypatch.setattr(main, "check_ha_url", lambda url, allow: VeiligDoel(url.rstrip("/"), None))
     return TestClient(main.app)
 
 

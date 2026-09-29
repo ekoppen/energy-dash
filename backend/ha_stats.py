@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from urllib.parse import urlsplit
 from datetime import datetime, timedelta, timezone
 
 
@@ -50,12 +51,21 @@ async def fetch_hourly_statistics(
     token: str,
     entity_ids: list[str],
     days: int,
+    pin_ip: str | None = None,
 ) -> dict[str, list[dict]]:
     """
     Haalt uur-statistieken op voor de gegeven entiteiten over `days` dagen.
     Retourneert per entity_id een lijst van buckets: {start, change}.
+    `pin_ip`: verbind met dit (vooraf goedgekeurde) IP in plaats van de hostnaam
+    opnieuw op te zoeken; handshake-Host en TLS-servernaam blijven de hostnaam.
     """
     ws_url = _ws_url(base_url)
+    pin: dict = {}
+    if pin_ip:
+        parts = urlsplit(ws_url)
+        pin = {"host": pin_ip, "port": parts.port or (443 if parts.scheme == "wss" else 80)}
+        if parts.scheme == "wss":
+            pin["server_hostname"] = parts.hostname
     start = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
 
     async def recv():
@@ -63,7 +73,7 @@ async def fetch_hourly_statistics(
             return json.loads(await ws.recv())
 
     async with _client_zonder_redirects()(
-        ws_url, max_size=MAX_BERICHT_BYTES, open_timeout=TIMEOUT_S, close_timeout=TIMEOUT_S
+        ws_url, max_size=MAX_BERICHT_BYTES, open_timeout=TIMEOUT_S, close_timeout=TIMEOUT_S, **pin
     ) as ws:
         # 1) auth handshake
         hello = await recv()  # {"type": "auth_required", ...}

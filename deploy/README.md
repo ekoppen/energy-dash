@@ -75,7 +75,9 @@ die host, op elke poort. Zet er dus alleen adressen in die je gebruikers mogen b
   gebruikers stellen hun URL in, maar zien het token nooit.
 - **SSRF-bescherming:** backend weigert standaard privé-adressen; alleen
   adressen in `HA_PRIVE_TOEGESTAAN` mogen naar het LAN. De backend volgt geen redirects (HTTP en WebSocket); een
-  redirect van een HA-URL wordt als fout afgewezen.
+  redirect van een HA-URL wordt als fout afgewezen. Na de controle verbindt de backend met precies het
+  goedgekeurde IP-adres (geen tweede DNS-opzoeking), zodat een domein niet tussendoor naar het LAN kan omslaan
+  (DNS-rebinding); Host-header en certificaatcontrole blijven op de hostnaam.
 - `.env` en secrets nooit in git (zie .gitignore).
 
 ## Uurdata: het /hours endpoint

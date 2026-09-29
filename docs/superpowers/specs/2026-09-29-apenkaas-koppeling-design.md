@@ -137,7 +137,8 @@ CORS: `allow_methods` uitbreiden met `PUT` en `DELETE`.
   privé, loopback, link-local of gereserveerd is — tenzij de host in
   `HA_PRIVE_TOEGESTAAN` staat (voor Eelko's eigen LAN-HA). Geen redirects
   volgen. Ruwe HA-antwoorden gaan nooit door naar de gebruiker, alleen de
-  uitkomst. Controle bij elk gebruik, niet alleen bij opslaan.
+  uitkomst. Controle bij elk gebruik, niet alleen bij opslaan, en daarna
+  verbinden met het goedgekeurde IP (tegen DNS-rebinding).
 - **Cross-user:** `instellingen` en `uurdata` via Apenkaas-permissies
   `user:<id>`; `ha_koppeling` via document-id = gebruikers-id, alleen door de
   backend geschreven.

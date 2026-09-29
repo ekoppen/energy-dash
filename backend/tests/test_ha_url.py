@@ -1,6 +1,6 @@
 import pytest
 
-from ha_url import UrlNietToegestaan, check_ha_url
+from ha_url import UrlNietToegestaan, VeiligDoel, check_ha_url, gepind_adres
 
 
 def resolver(mapping):
@@ -9,7 +9,7 @@ def resolver(mapping):
 
 def test_publiek_adres_ok():
     r = resolver({"ha.example.nl": ["93.184.216.34"]})
-    assert check_ha_url("https://ha.example.nl/", set(), r) == "https://ha.example.nl"
+    assert check_ha_url("https://ha.example.nl/", set(), r) == VeiligDoel("https://ha.example.nl", "93.184.216.34")
 
 
 def test_prive_ip_geweigerd():
@@ -35,7 +35,7 @@ def test_ipv4_mapped_loopback_geweigerd():
 def test_allowlist_mag_prive():
     def nooit(host):
         raise AssertionError("allowlist hoort niet te resolven")
-    assert check_ha_url("http://192.168.178.50:8123", {"192.168.178.50"}, nooit) == "http://192.168.178.50:8123"
+    assert check_ha_url("http://192.168.178.50:8123", {"192.168.178.50"}, nooit) == VeiligDoel("http://192.168.178.50:8123", None)
 
 
 @pytest.mark.parametrize("url", ["ftp://ha.example.nl", "ha.example.nl", "http://", "file:///etc/passwd"])
@@ -49,3 +49,18 @@ def test_onbekende_host():
         raise OSError("nx")
     with pytest.raises(UrlNietToegestaan):
         check_ha_url("https://bestaat-niet.example", set(), faal)
+
+
+def test_gepind_adres_http_met_poort():
+    assert gepind_adres(VeiligDoel("http://ha.example.nl:8123", "93.184.216.34")) == (
+        "http://93.184.216.34:8123", "ha.example.nl:8123", "ha.example.nl")
+
+
+def test_gepind_adres_https_ipv6_en_userinfo_weg():
+    assert gepind_adres(VeiligDoel("https://u:p@ha.example.nl", "2606:4700::1")) == (
+        "https://[2606:4700::1]", "ha.example.nl", "ha.example.nl")
+
+
+def test_gepind_adres_zonder_pin_ongewijzigd():
+    assert gepind_adres(VeiligDoel("http://192.168.178.50:8123", None)) == (
+        "http://192.168.178.50:8123", "192.168.178.50:8123", "192.168.178.50")

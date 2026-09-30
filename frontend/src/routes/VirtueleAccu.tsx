@@ -103,7 +103,7 @@ export default function VirtueleAccu() {
             <h2 style={{ margin: "0 0 14px", fontSize: 18 }}>Sinds {data.instellingen.startdatum}</h2>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 18, marginBottom: 18 }}>
               <Getal label="Opbrengst zonder saldering" waarde={euro(data.totaal.zonder_saldering)} kleur={C.good} hint="het scenario vanaf 2027" />
-              <Getal label="Opbrengst mét saldering" waarde={euro(data.totaal.met_saldering)} hint="nu, t/m 2026 (benadering)" />
+              <Getal label="Opbrengst mét saldering" waarde={euro(data.totaal.met_saldering)} hint={data.totaal.met_saldering < 0 ? "t/m 2026: saldering maakt opslaan waardeloos, het rendementsverlies kost geld" : "nu, t/m 2026 (benadering)"} />
               <Getal label="Minder teruggeleverd" waarde={`${Math.round(data.totaal.minder_teruggeleverd_kwh)} kWh`} />
               <Getal label="Minder ingekocht" waarde={`${Math.round(data.totaal.minder_ingekocht_kwh)} kWh`} />
               <Getal label="Volle laadcycli" waarde={data.totaal.cycli.toLocaleString("nl-NL")} />

@@ -139,3 +139,34 @@ def test_delete_koppeling(client, monkeypatch):
     monkeypatch.setattr(main, "apenkaas", nep)
     assert client.delete("/koppeling", headers=AUTH).json() == {"gekoppeld": False}
     assert nep.koppeling is None
+
+
+def test_geweigerd_token_raakt_ha_niet_meer(client, monkeypatch):
+    monkeypatch.setattr(main, "apenkaas", NepApenkaas(KOPPELING))
+    monkeypatch.setattr(main, "_geweigerde_tokens", {main._token_id("HA-GEHEIM")})
+
+    async def mag_niet(*_):
+        raise AssertionError("HA mag niet aangeroepen worden met een geweigerd token")
+
+    monkeypatch.setattr(main, "_ha_state", mag_niet)
+    monkeypatch.setattr(main, "fetch_hourly_statistics", mag_niet)
+    for pad in ("/now", "/hours"):
+        r = client.get(pad, headers=AUTH)
+        assert r.json()["detail"]["code"] == "ha_token"
+
+
+def test_opnieuw_koppelen_met_werkend_token_heft_markering_op(client, monkeypatch):
+    nep = NepApenkaas()
+    monkeypatch.setattr(main, "apenkaas", nep)
+    monkeypatch.setattr(main, "_geweigerde_tokens", {main._token_id("HA-GEHEIM")})
+
+    async def states(doel, token, path):
+        return [{"entity_id": v} for v in KOPPELING["entities"].values()] + [
+            {"entity_id": f"sensor.p1_meter_x_{s}"} for s in
+            ("active_power", "active_tariff", "total_power_import_t1", "total_power_import_t2",
+             "total_power_export_t1", "total_power_export_t2")]
+
+    monkeypatch.setattr(main, "_ha_get", states)
+    r = client.put("/koppeling", headers=AUTH, json={"ha_url": "https://ha.example.nl", "ha_token": "HA-GEHEIM"})
+    assert r.status_code == 200
+    assert main._token_id("HA-GEHEIM") not in main._geweigerde_tokens

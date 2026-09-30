@@ -9,6 +9,7 @@ gaat nooit terug naar de browser en komt nooit in de logs.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 from contextlib import asynccontextmanager
 
@@ -20,7 +21,7 @@ from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
 from apenkaas import Apenkaas, ApenkaasFout, NietIngelogd
-from ha_stats import combine_import_export, fetch_hourly_statistics
+from ha_stats import HAAuthError, combine_import_export, fetch_hourly_statistics
 from ha_url import UrlNietToegestaan, VeiligDoel, check_ha_url, gepind_adres
 from p1 import GeenP1Gevonden, find_p1_entities
 
@@ -66,6 +67,22 @@ def fout(status: int, code: str, melding: str) -> HTTPException:
     return HTTPException(status, {"code": code, "melding": melding})
 
 
+# Tokens die HA weigerde (sha256). Opgeslagen koppelingen met zo'n token proberen we niet
+# opnieuw: blijven aankloppen laat HA na een paar pogingen het IP van deze server blokkeren
+# (ip_ban). Opnieuw koppelen met een werkend token heft de markering op.
+# ponytail: in het geheugen van dit proces; na een herstart kost het één poging opnieuw.
+_geweigerde_tokens: set[str] = set()
+
+
+def _token_id(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def _token_geweigerd(token: str) -> HTTPException:
+    _geweigerde_tokens.add(_token_id(token))
+    return fout(502, "ha_token", "Home Assistant accepteert het token niet meer. Koppel opnieuw via Instellingen.")
+
+
 bearer = HTTPBearer(auto_error=False)
 
 
@@ -89,6 +106,8 @@ async def koppeling_van(uid: str = Depends(current_user)) -> dict:
         raise fout(503, "apenkaas_onbereikbaar", "Apenkaas is even niet bereikbaar")
     if k is None:
         raise fout(404, "geen_koppeling", "Nog geen Home Assistant gekoppeld")
+    if _token_id(k["ha_token"]) in _geweigerde_tokens:
+        raise _token_geweigerd(k["ha_token"])
     return k
 
 
@@ -116,7 +135,7 @@ async def _ha_get(doel: VeiligDoel, token: str, path: str):
     except httpx.HTTPError:
         raise fout(502, "ha_onbereikbaar", "Je Home Assistant is niet bereikbaar")
     if r.status_code in (401, 403):
-        raise fout(502, "ha_token", "Home Assistant accepteert het token niet")
+        raise _token_geweigerd(token)
     if r.status_code != 200:
         raise fout(502, "ha_onbereikbaar", f"Home Assistant gaf status {r.status_code}")
     return r.json()
@@ -160,6 +179,7 @@ async def koppeling_opslaan(body: KoppelingIn, uid: str = Depends(current_user))
     except ApenkaasFout as e:
         log.warning("koppeling opslaan mislukt user=%s: %s", uid, e)
         raise fout(503, "apenkaas_onbereikbaar", "Apenkaas is even niet bereikbaar")
+    _geweigerde_tokens.discard(_token_id(body.ha_token))
     log.info("koppeling opgeslagen user=%s", uid)
     return {"gekoppeld": True, "ha_url": doel.url}
 
@@ -194,6 +214,8 @@ async def hours(days: int = Query(365, ge=1, le=730), k: dict = Depends(koppelin
     export_ids = [e["export_t1"], e["export_t2"]]
     try:
         stats = await fetch_hourly_statistics(doel.url, k["ha_token"], import_ids + export_ids, days, pin_ip=doel.ip)
+    except HAAuthError:
+        raise _token_geweigerd(k["ha_token"])
     except Exception as err:  # ook OSError, timeouts, redirects: nooit HA-tekst terug naar de gebruiker
         log.warning("uurstatistieken mislukt: %r", err)
         raise fout(502, "ha_onbereikbaar", "Uur-statistieken ophalen mislukt")

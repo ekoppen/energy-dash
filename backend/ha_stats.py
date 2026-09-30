@@ -22,6 +22,10 @@ class HAStatsError(Exception):
     pass
 
 
+class HAAuthError(HAStatsError):
+    """HA weigerde het token."""
+
+
 # 730 dagen x 4 reeksen x ~120 B per uurbucket is ~8,4 MB; 16 MiB geeft ruimte.
 MAX_BERICHT_BYTES = 16 * 1024 * 1024
 TIMEOUT_S = 20  # connect en elke recv
@@ -82,7 +86,7 @@ async def fetch_hourly_statistics(
         await ws.send(json.dumps({"type": "auth", "access_token": token}))
         auth_res = await recv()
         if auth_res.get("type") != "auth_ok":
-            raise HAStatsError("Auth mislukt — controleer HA_TOKEN.")
+            raise HAAuthError("Auth mislukt — controleer HA_TOKEN.")
 
         # 2) statistics_during_period opvragen (period=hour)
         msg_id = 1

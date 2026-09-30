@@ -57,3 +57,19 @@ def test_websocket_verbindt_met_gepind_ip_en_houdt_hostnaam():
     verzoek = gezien[0].decode().lower()
     assert verzoek.startswith("get /api/websocket ")
     assert "host: ha.invalid:" in verzoek
+
+
+def test_geweigerd_token_wordt_onthouden():
+    """HA's 401 markeert het token, zodat opgeslagen koppelingen HA er niet mee blijven bestoken."""
+    async def run():
+        srv, poort, _ = await _server(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+        doel = VeiligDoel(f"http://ha.invalid:{poort}", "127.0.0.1")
+        with pytest.raises(main.HTTPException) as e:
+            await main._ha_get(doel, "verlopen-token", "/api/states")
+        srv.close()
+        return e.value.detail["code"]
+
+    main._geweigerde_tokens.clear()
+    assert asyncio.run(run()) == "ha_token"
+    assert main._token_id("verlopen-token") in main._geweigerde_tokens
+    main._geweigerde_tokens.clear()

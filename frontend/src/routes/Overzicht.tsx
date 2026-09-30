@@ -20,15 +20,20 @@ export default function Overzicht() {
   const [err, setErr] = useState<string | null>(null);
   const [tar, setTar] = useState<Instellingen>(STANDAARD);
   const [geenKoppeling, setGeenKoppeling] = useState(false);
+  const [tokenGeweigerd, setTokenGeweigerd] = useState(false);
 
   useEffect(() => {
     laadInstellingen().then((d) => setTar(d.data)).catch(() => {});
+    let t: ReturnType<typeof setInterval> | undefined;
+    // Zonder (werkende) koppeling heeft verversen geen zin; blijven proberen met een
+    // geweigerd token laat HA bovendien het IP van de server blokkeren.
     const load = () => api.now().then((n) => { setNow(n); setErr(null); }).catch((e) => {
-      if (e instanceof ApiFout && e.code === "geen_koppeling") setGeenKoppeling(true);
+      if (e instanceof ApiFout && e.code === "geen_koppeling") { setGeenKoppeling(true); clearInterval(t); }
+      else if (e instanceof ApiFout && e.code === "ha_token") { setTokenGeweigerd(true); setNow(null); clearInterval(t); }
       else setErr(e instanceof Error ? e.message : String(e));
     });
     load();
-    const t = setInterval(load, 10000); // elke 10s verversen
+    t = setInterval(load, 10000); // elke 10s verversen
     return () => clearInterval(t);
   }, []);
 
@@ -53,6 +58,13 @@ export default function Overzicht() {
           </div>
         )}
 
+        {tokenGeweigerd && (
+          <div role="status" style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: 16, color: C.sub, fontSize: 14 }}>
+            Home Assistant accepteert je token niet meer (verlopen of verwijderd). Maak in HA een nieuw
+            token aan en <Link to="/instellingen" style={{ color: C.accent }}>koppel opnieuw</Link>.
+          </div>
+        )}
+
         {geenKoppeling && (
           <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: 16, color: C.sub, fontSize: 14 }}>
             Nog geen Home Assistant gekoppeld. <Link to="/instellingen" style={{ color: C.accent }}>Koppel je HA</Link> voor live data,
@@ -70,7 +82,7 @@ export default function Overzicht() {
           </div>
         )}
 
-        {!now && !err && !geenKoppeling && <div style={{ color: C.dim, fontSize: 14 }}>Laden…</div>}
+        {!now && !err && !geenKoppeling && !tokenGeweigerd && <div style={{ color: C.dim, fontSize: 14 }}>Laden…</div>}
       </div>
     </div>
   );

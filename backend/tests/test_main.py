@@ -17,6 +17,7 @@ KOPPELING = {
 class NepApenkaas:
     def __init__(self, koppeling=None, fout=None):
         self.koppeling, self.fout, self.opgeslagen = koppeling, fout, None
+        self.docs = {}
 
     async def user_id(self, token):
         if self.fout:
@@ -33,6 +34,23 @@ class NepApenkaas:
 
     async def delete_koppeling(self, uid):
         self.koppeling = None
+
+    async def documenten(self, col, filters=None):
+        docs = list(self.docs.get(col, {}).values())
+        for veld, waarde in (filters or {}).items():
+            docs = [d for d in docs if f"eq.{d['data'].get(veld)}" == waarde]
+        return docs
+
+    async def document(self, col, doc_id):
+        return self.docs.get(col, {}).get(doc_id)
+
+    async def maak_document(self, col, doc_id, data, lees, schrijf):
+        self.docs.setdefault(col, {})[doc_id] = {
+            "id": doc_id, "data": data, "read_permissions": lees, "write_permissions": schrijf,
+            "bijgewerkt_op": "2026-09-30T12:00:00Z"}
+
+    async def verwijder_document(self, col, doc_id):
+        self.docs.get(col, {}).pop(doc_id, None)
 
 
 @pytest.fixture

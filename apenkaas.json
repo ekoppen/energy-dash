@@ -10,7 +10,7 @@
         { "key": "vaste_kosten_maand", "type": "number" }
       ],
       "createPermissions": ["users"],
-      "env": ["VITE_APENKAAS_INSTELLINGEN_COLLECTION_ID"]
+      "env": ["VITE_APENKAAS_INSTELLINGEN_COLLECTION_ID", "APENKAAS_INSTELLINGEN_COLLECTION_ID"]
     },
     {
       "naam": "ha_koppeling",
@@ -19,6 +19,12 @@
       ],
       "createPermissions": [],
       "env": ["APENKAAS_KOPPELING_COLLECTION_ID"]
+    },
+    {
+      "naam": "display_sleutels",
+      "schema": [{ "key": "user_id", "type": "string" }],
+      "createPermissions": [],
+      "env": ["APENKAAS_DISPLAY_COLLECTION_ID"]
     }
   ],
   "buckets": [

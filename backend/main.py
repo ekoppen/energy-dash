@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
 from apenkaas import Apenkaas, ApenkaasFout, NietIngelogd
+from display_sleutel import nieuwe_sleutel, sleutel_id
 from ha_stats import HAAuthError, combine_import_export, fetch_hourly_statistics
 from ha_url import UrlNietToegestaan, VeiligDoel, check_ha_url, gepind_adres
 from p1 import GeenP1Gevonden, find_p1_entities
@@ -33,6 +34,8 @@ class Settings(BaseSettings):
     apenkaas_tenant_id: str = ""
     apenkaas_server_key: str = ""
     apenkaas_koppeling_collection_id: str = ""
+    apenkaas_instellingen_collection_id: str = ""
+    apenkaas_display_collection_id: str = ""
     ha_prive_toegestaan: str = ""
     cors_origins: str = "http://localhost:8080"
 
@@ -58,7 +61,7 @@ app = FastAPI(title="Energie Dashboard API", version="0.2.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
-    allow_methods=["GET", "PUT", "DELETE"],
+    allow_methods=["GET", "PUT", "POST", "DELETE"],
     allow_headers=["*"],
 )
 
@@ -191,6 +194,51 @@ async def koppeling_verwijderen(uid: str = Depends(current_user)) -> dict:
     except ApenkaasFout:
         raise fout(503, "apenkaas_onbereikbaar", "Apenkaas is even niet bereikbaar")
     return {"gekoppeld": False}
+
+
+async def _sleutels_van(uid: str) -> list[dict]:
+    return await apenkaas.documenten(settings.apenkaas_display_collection_id, {"user_id": f"eq.{uid}"})
+
+
+async def gebruiker_van_sleutel(sleutel: str | None) -> str | None:
+    if not sleutel:
+        return None
+    doc = await apenkaas.document(settings.apenkaas_display_collection_id, sleutel_id(sleutel))
+    return doc["data"].get("user_id") if doc else None
+
+
+@app.get("/display-sleutel")
+async def display_sleutel_status(uid: str = Depends(current_user)) -> dict:
+    try:
+        return {"actief": bool(await _sleutels_van(uid))}
+    except ApenkaasFout:
+        raise fout(503, "apenkaas_onbereikbaar", "Apenkaas is even niet bereikbaar")
+
+
+@app.post("/display-sleutel")
+async def display_sleutel_maken(uid: str = Depends(current_user)) -> dict:
+    """Maakt een nieuwe sleutel; eerdere sleutels van deze gebruiker vervallen. Eénmalig zichtbaar."""
+    sleutel = nieuwe_sleutel()
+    try:
+        for d in await _sleutels_van(uid):
+            await apenkaas.verwijder_document(settings.apenkaas_display_collection_id, d["id"])
+        await apenkaas.maak_document(settings.apenkaas_display_collection_id, sleutel_id(sleutel),
+                                     {"user_id": uid}, ["app"], ["app"])
+    except ApenkaasFout as e:
+        log.warning("display-sleutel maken mislukt user=%s: %s", uid, e)
+        raise fout(503, "apenkaas_onbereikbaar", "Apenkaas is even niet bereikbaar")
+    log.info("display-sleutel aangemaakt user=%s", uid)
+    return {"sleutel": sleutel}
+
+
+@app.delete("/display-sleutel")
+async def display_sleutel_intrekken(uid: str = Depends(current_user)) -> dict:
+    try:
+        for d in await _sleutels_van(uid):
+            await apenkaas.verwijder_document(settings.apenkaas_display_collection_id, d["id"])
+    except ApenkaasFout:
+        raise fout(503, "apenkaas_onbereikbaar", "Apenkaas is even niet bereikbaar")
+    return {"actief": False}
 
 
 @app.get("/now")

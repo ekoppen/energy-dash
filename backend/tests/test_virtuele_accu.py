@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 
 from virtuele_accu import (
-    AccuInstellingen, Tarieven, accu_instellingen, dagen, gemiddeld_inkooptarief,
-    rekening, simuleer, totaal,
+    AccuInstellingen, Tarieven, accu_instellingen, accu_nu, dagen, gemiddeld_inkooptarief,
+    rekening, signaal, simuleer, totaal,
 )
 
 GEVALLEN = json.loads((Path(__file__).parents[2] / "testdata" / "accu-gevallen.json").read_text())
@@ -80,3 +80,30 @@ def test_dagen_groeperen_in_nederlandse_tijd():
     r = [{"start_ms": 1_780_353_000_000, "imp": 0, "exp": 1, "imp_dal": 0}]
     d = dagen(r, simuleer(r, inst()), inst(), T)
     assert d[0]["datum"] == "2026-06-02"
+
+
+def test_accu_nu():
+    i = inst(cap=10, max_kw=2.5)
+    assert accu_nu(5, i, -1800) == {"status": "laden", "vermogen_w": 1800}
+    assert accu_nu(5, i, -4000) == {"status": "laden", "vermogen_w": 2500}
+    assert accu_nu(10, i, -1800) == {"status": "vol", "vermogen_w": 0}
+    assert accu_nu(5, i, 900) == {"status": "ontladen", "vermogen_w": 900}
+    assert accu_nu(0, i, 900) == {"status": "leeg", "vermogen_w": 0}
+    assert accu_nu(5, i, 0) == {"status": "stil", "vermogen_w": 0}
+
+
+@pytest.mark.parametrize("vermogen, accu, verwacht", [
+    (-2000, None, "goed_moment"),
+    (-2000, {"status": "laden", "vermogen_w": 2000}, "accu_laadt"),
+    (-4000, {"status": "laden", "vermogen_w": 2500}, "goed_moment"),   # rest 1500 > 300
+    (-2000, {"status": "vol", "vermogen_w": 0}, "goed_moment"),
+    (1500, {"status": "ontladen", "vermogen_w": 1500}, "accu_ontlaadt"),
+    (1500, {"status": "leeg", "vermogen_w": 0}, "afname"),
+    (1500, None, "afname"),
+    (-200, None, "rustig"),
+    (250, {"status": "leeg", "vermogen_w": 0}, "rustig"),
+])
+def test_signaal(vermogen, accu, verwacht):
+    s = signaal(vermogen, 300, accu)
+    assert s["signaal"] == verwacht
+    assert s["kleur"].startswith("#") and s["advies"]

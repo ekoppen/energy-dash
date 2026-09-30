@@ -149,3 +149,41 @@ def dagen(records: list[dict], uren: list[Uur], inst: AccuInstellingen, t: Tarie
         }
         for datum, d in per_dag.items()
     ]
+
+
+SIGNALEN: dict[str, tuple[str, str]] = {
+    "goed_moment": ("#3ec46d", "Goed moment: je overschot gaat het net op, zet een apparaat aan"),
+    "accu_laadt": ("#f0a32a", "Overschot gaat de virtuele accu in"),
+    "accu_ontlaadt": ("#2f6fed", "De virtuele accu levert je verbruik"),
+    "afname": ("#e8654f", "Je koopt nu stroom in"),
+    "rustig": ("#5d6b78", "Rustig: weinig afname of teruglevering"),
+    "fout": ("#5d6b78", "Geen actuele gegevens"),
+}
+_EPS = 1e-9
+
+
+def accu_nu(soc_kwh: float, inst: AccuInstellingen, vermogen_w: float) -> dict:
+    max_w = inst.max_vermogen_kw * 1000
+    if vermogen_w < 0:
+        if soc_kwh >= inst.capaciteit_kwh - _EPS:
+            return {"status": "vol", "vermogen_w": 0}
+        return {"status": "laden", "vermogen_w": min(-vermogen_w, max_w)}
+    if vermogen_w > 0:
+        if soc_kwh <= _EPS:
+            return {"status": "leeg", "vermogen_w": 0}
+        return {"status": "ontladen", "vermogen_w": min(vermogen_w, max_w)}
+    return {"status": "stil", "vermogen_w": 0}
+
+
+def signaal(vermogen_w: float, drempel_w: float, accu: dict | None) -> dict:
+    accu_w = accu["vermogen_w"] if accu else 0
+    if -vermogen_w > drempel_w:
+        rest = -vermogen_w - (accu_w if accu and accu["status"] == "laden" else 0)
+        code = "goed_moment" if rest > drempel_w else "accu_laadt"
+    elif vermogen_w > drempel_w:
+        rest = vermogen_w - (accu_w if accu and accu["status"] == "ontladen" else 0)
+        code = "afname" if rest > drempel_w else "accu_ontlaadt"
+    else:
+        code = "rustig"
+    kleur, advies = SIGNALEN[code]
+    return {"signaal": code, "kleur": kleur, "advies": advies}

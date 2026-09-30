@@ -7,7 +7,14 @@ const input = { background: C.bg, color: C.ink, border: `1px solid ${C.line}`, b
 const knop = { background: C.accent, color: "#1a1205", border: "none", borderRadius: 9, padding: "10px 16px", fontWeight: 600, fontSize: 13, cursor: "pointer" };
 const paneel = { background: C.panel, border: `1px solid ${C.line}`, borderRadius: 16, padding: 24, marginBottom: 20, display: "grid", gap: 14 };
 const melding = (e: unknown) => (e instanceof Error ? e.message : String(e));
-const TARIEVEN = ["tarief_piek", "tarief_dal", "tarief_teruglevering", "tarief_terugleverkosten"] as const;
+const TARIEVEN = ["tarief_piek", "tarief_dal", "tarief_teruglevering", "tarief_terugleverkosten", "vaste_kosten_maand"] as const;
+const LABELS: Record<(typeof TARIEVEN)[number], string> = {
+  tarief_piek: "Piek (€/kWh)",
+  tarief_dal: "Dal (€/kWh)",
+  tarief_teruglevering: "Teruglevering, vergoeding (€/kWh)",
+  tarief_terugleverkosten: "Terugleverkosten: wat je leverancier per teruggeleverde kWh rekent (€/kWh)",
+  vaste_kosten_maand: "Vaste kosten per maand, netto: vastrecht + netbeheer − vermindering energiebelasting (€, mag negatief)",
+};
 
 export default function Instellingen() {
   const [doc, setDoc] = useState<{ id: string; data: Inst } | null>(null);
@@ -28,8 +35,8 @@ export default function Instellingen() {
 
   const bewaarTarieven = async () => {
     if (!doc) return;
-    const { tarief_piek, tarief_dal, tarief_teruglevering, tarief_terugleverkosten } = doc.data;
-    try { await bewaarInstellingen(doc.id, { tarief_piek, tarief_dal, tarief_teruglevering, tarief_terugleverkosten }); setTarievenStatus("Opgeslagen ✓"); }
+    const tarieven = Object.fromEntries(TARIEVEN.map((k) => [k, doc.data[k]]));
+    try { await bewaarInstellingen(doc.id, tarieven); setTarievenStatus("Opgeslagen ✓"); }
     catch (e) { setTarievenStatus(melding(e)); }
   };
 
@@ -59,11 +66,11 @@ export default function Instellingen() {
         <h1 style={{ fontSize: 30, fontWeight: 700, margin: "0 0 24px" }}>Instellingen</h1>
 
         <section style={paneel}>
-          <h2 style={{ margin: 0, fontSize: 18 }}>Tarieven (€/kWh)</h2>
+          <h2 style={{ margin: 0, fontSize: 18 }}>Tarieven</h2>
           {doc && TARIEVEN.map((k) => (
             <label key={k} style={{ fontSize: 13, color: C.sub }}>
-              {{ tarief_piek: "Piek", tarief_dal: "Dal", tarief_teruglevering: "Teruglevering (vergoeding)", tarief_terugleverkosten: "Terugleverkosten (wat je leverancier per teruggeleverde kWh rekent)" }[k]}
-              <input style={input} type="number" step="0.0001" min="0" value={doc.data[k]} onChange={(e) => zetTarief(k, e.target.value)} />
+              {LABELS[k]}
+              <input style={input} type="number" step={k === "vaste_kosten_maand" ? "0.01" : "0.0001"} min={k === "vaste_kosten_maand" ? undefined : "0"} value={doc.data[k]} onChange={(e) => zetTarief(k, e.target.value)} />
             </label>
           ))}
           <div><button style={knop} onClick={bewaarTarieven} disabled={!doc}>Opslaan</button></div>

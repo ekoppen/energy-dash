@@ -9,10 +9,12 @@ export interface AdviesWaarden {
 }
 export interface Instellingen {
   tarief_piek: number; tarief_dal: number; tarief_teruglevering: number; tarief_terugleverkosten: number;
+  /** netto vaste kosten per maand (vastrecht + netbeheer − vermindering energiebelasting); mag negatief */
+  vaste_kosten_maand: number;
   advies: Partial<AdviesWaarden>;
 }
 
-export const STANDAARD: Instellingen = { tarief_piek: 0.25439, tarief_dal: 0.233699, tarief_teruglevering: 0.06, tarief_terugleverkosten: 0, advies: {} };
+export const STANDAARD: Instellingen = { tarief_piek: 0.25439, tarief_dal: 0.233699, tarief_teruglevering: 0.06, tarief_terugleverkosten: 0, vaste_kosten_maand: 0, advies: {} };
 
 const DOCS = `${APENKAAS_API}/collections/${import.meta.env.VITE_APENKAAS_INSTELLINGEN_COLLECTION_ID}/documents`;
 const JSON_HEADERS = { "Content-Type": "application/json" };

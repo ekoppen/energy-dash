@@ -75,6 +75,7 @@ export default function Advies() {
     defaultPriceImport: gemiddeldInkooptarief(hours ?? csvHours ?? undefined, doc?.data.tarief_piek ?? 0.2544, doc?.data.tarief_dal ?? 0.2337),
     defaultPriceFeedIn: doc?.data.tarief_teruglevering ?? 0.06,
     defaultExportCost: doc?.data.tarief_terugleverkosten ?? 0,
+    vasteKostenMaand: doc?.data.vaste_kosten_maand ?? 0,
     initial: doc?.data.advies,
     onChange,
     initialCsvHours: csvHours,

@@ -26,6 +26,8 @@ export interface SalderingImpactProps {
   defaultPriceImport?: number;
   defaultPriceFeedIn?: number;
   defaultExportCost?: number;
+  /** netto vaste kosten per maand; alleen voor de totale jaarrekening */
+  vasteKostenMaand?: number;
   initial?: Partial<AdviesWaarden>;
   onChange?: (w: Partial<AdviesWaarden>) => void;
   initialCsvHours?: HourRecord[] | null;
@@ -48,6 +50,7 @@ export default function SalderingImpact({
   defaultPriceImport = 0.2544,
   defaultPriceFeedIn = 0.06,
   defaultExportCost = 0,
+  vasteKostenMaand = 0,
   initial, onChange, initialCsvHours, onCsv,
 }: SalderingImpactProps) {
   const [priceImport, setPriceImport] = useState(defaultPriceImport);
@@ -143,6 +146,12 @@ export default function SalderingImpact({
             <Metric label="Vanaf 2027 (zónder)" value={euro(impact.withoutSaldering.net)} color={C.bad} hint="netto variabele stroomkosten/jaar" />
             <Metric label="Salderingsschade" value={"+" + euro(impact.yearlyImpact)} color={C.accent} hint="wat je er per jaar op achteruitgaat" />
             <Metric label="Teruglevering/jaar" value={kwh(impact.totals.gridExport)} color={C.export} hint="verliest waarde vanaf 2027" />
+          </div>
+          <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${C.line}`, fontSize: 13, color: C.sub, lineHeight: 1.6 }}>
+            Totale jaarrekening stroom (incl. {euro(vasteKostenMaand * 12)} vaste kosten):{" "}
+            nu <b style={{ color: C.ink }}>{euro(impact.withSaldering.net + vasteKostenMaand * 12)}</b>,
+            vanaf 2027 <b style={{ color: C.ink }}>{euro(impact.withoutSaldering.net + vasteKostenMaand * 12)}</b>.
+            {vasteKostenMaand === 0 && " Vul je vaste kosten in bij Instellingen voor een compleet bedrag."}
           </div>
         </div>
 

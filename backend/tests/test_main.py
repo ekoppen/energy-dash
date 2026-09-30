@@ -188,3 +188,69 @@ def test_opnieuw_koppelen_met_werkend_token_heft_markering_op(client, monkeypatc
     r = client.put("/koppeling", headers=AUTH, json={"ha_url": "https://ha.example.nl", "ha_token": "HA-GEHEIM"})
     assert r.status_code == 200
     assert main._token_id("HA-GEHEIM") not in main._geweigerde_tokens
+
+
+def _nep_dienst(monkeypatch, nu=None, fout=None):
+    class Nep:
+        async def nu(self, uid, k):
+            if fout:
+                raise fout
+            return nu or {"signaal": "rustig"}
+
+        async def volledig(self, uid, k):
+            return {"nu": {"signaal": "rustig"}, "instellingen": {}, "totaal": None, "dagen": []}
+
+        def fout_antwoord(self, melding):
+            return {"signaal": "fout", "advies": melding}
+
+    monkeypatch.setattr(main, "accu_dienst", Nep())
+
+
+def test_signaal_met_sleutel_header_en_query(client, monkeypatch):
+    monkeypatch.setattr(main, "apenkaas", NepApenkaas(KOPPELING))
+    _nep_dienst(monkeypatch)
+
+    async def van(s):
+        return "u1" if s == "ed_goed" else None
+
+    monkeypatch.setattr(main, "gebruiker_van_sleutel", van)
+    assert client.get("/signaal", headers={"Authorization": "Bearer ed_goed"}).json() == {"signaal": "rustig"}
+    assert client.get("/signaal?sleutel=ed_goed").json() == {"signaal": "rustig"}
+    assert client.get("/signaal?sleutel=fout").status_code == 401
+    assert client.get("/signaal").status_code == 401
+
+
+def test_signaal_met_geweigerd_token_is_fout_zonder_ha(client, monkeypatch):
+    monkeypatch.setattr(main, "apenkaas", NepApenkaas(KOPPELING))
+    monkeypatch.setattr(main, "_geweigerde_tokens", {main._token_id("HA-GEHEIM")})
+    _nep_dienst(monkeypatch, fout=AssertionError("dienst mag niet aangeroepen worden"))
+
+    async def van(s):
+        return "u1"
+
+    monkeypatch.setattr(main, "gebruiker_van_sleutel", van)
+    r = client.get("/signaal?sleutel=ed_x")
+    assert r.status_code == 200 and r.json()["signaal"] == "fout"
+
+
+def test_signaal_zonder_koppeling_is_fout(client, monkeypatch):
+    monkeypatch.setattr(main, "apenkaas", NepApenkaas())
+    _nep_dienst(monkeypatch)
+
+    async def van(s):
+        return "u1"
+
+    monkeypatch.setattr(main, "gebruiker_van_sleutel", van)
+    assert client.get("/signaal?sleutel=ed_x").json()["signaal"] == "fout"
+
+
+def test_accu_vereist_inlog_en_koppeling(client, monkeypatch):
+    monkeypatch.setattr(main, "apenkaas", NepApenkaas(KOPPELING))
+    _nep_dienst(monkeypatch)
+    assert client.get("/accu").status_code == 401
+    assert client.get("/accu", headers=AUTH).json()["dagen"] == []
+
+
+def test_display_sleutel_werkt_niet_op_andere_routes(client, monkeypatch):
+    monkeypatch.setattr(main, "apenkaas", NepApenkaas(KOPPELING))
+    assert client.get("/now", headers={"Authorization": "Bearer ed_goed"}).status_code == 401

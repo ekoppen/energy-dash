@@ -20,7 +20,8 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
-from apenkaas import Apenkaas, ApenkaasFout, NietIngelogd
+from accu_dienst import AccuDienst
+from apenkaas import Apenkaas, ApenkaasFout, NietIngelogd, kies_instellingen
 from display_sleutel import nieuwe_sleutel, sleutel_id
 from ha_stats import HAAuthError, combine_import_export, fetch_hourly_statistics
 from ha_url import UrlNietToegestaan, VeiligDoel, check_ha_url, gepind_adres
@@ -241,9 +242,7 @@ async def display_sleutel_intrekken(uid: str = Depends(current_user)) -> dict:
     return {"actief": False}
 
 
-@app.get("/now")
-async def now(k: dict = Depends(koppeling_van)) -> dict:
-    """Actueel vermogen en actief tarief; de prijs rekent de frontend uit."""
+async def _nu_van(k: dict) -> dict:
     power = await _ha_state(k, k["entities"]["active_power"])
     tariff = await _ha_state(k, k["entities"]["active_tariff"])
     try:
@@ -253,9 +252,7 @@ async def now(k: dict = Depends(koppeling_van)) -> dict:
     return {"vermogen_w": vermogen, "actief_tarief": "dal" if tariff.get("state") == "1" else "piek"}
 
 
-@app.get("/hours")
-async def hours(days: int = Query(365, ge=1, le=730), k: dict = Depends(koppeling_van)) -> list[dict]:
-    """Uurdata {imp, exp} uit de HA recorder-statistieken van de gebruiker."""
+async def _uren_van(k: dict, days: int) -> list[dict]:
     doel = await _veilige_url(k["ha_url"])
     e = k["entities"]
     import_ids = [e["import_t1"], e["import_t2"]]
@@ -267,7 +264,54 @@ async def hours(days: int = Query(365, ge=1, le=730), k: dict = Depends(koppelin
     except Exception as err:  # ook OSError, timeouts, redirects: nooit HA-tekst terug naar de gebruiker
         log.warning("uurstatistieken mislukt: %r", err)
         raise fout(502, "ha_onbereikbaar", "Uur-statistieken ophalen mislukt")
-    records = combine_import_export(stats, import_ids, export_ids, dal_import_ids=[e["import_t1"]])
+    return combine_import_export(stats, import_ids, export_ids, dal_import_ids=[e["import_t1"]])
+
+
+@app.get("/now")
+async def now(k: dict = Depends(koppeling_van)) -> dict:
+    """Actueel vermogen en actief tarief; de prijs rekent de frontend uit."""
+    return await _nu_van(k)
+
+
+@app.get("/hours")
+async def hours(days: int = Query(365, ge=1, le=730), k: dict = Depends(koppeling_van)) -> list[dict]:
+    """Uurdata {start_ms, imp, exp, imp_dal} uit de HA recorder-statistieken van de gebruiker."""
+    records = await _uren_van(k, days)
     if not records:
         raise fout(422, "geen_uurdata", "Home Assistant heeft (nog) geen uur-statistieken voor de P1-meter")
     return records
+
+
+async def _lees_instellingen(uid: str) -> dict:
+    doc = kies_instellingen(await apenkaas.documenten(settings.apenkaas_instellingen_collection_id), uid)
+    return doc["data"] if doc else {}
+
+
+accu_dienst = AccuDienst(_lees_instellingen, _nu_van, _uren_van)
+
+
+@app.get("/accu")
+async def accu(uid: str = Depends(current_user), k: dict = Depends(koppeling_van)) -> dict:
+    try:
+        return await accu_dienst.volledig(uid, k)
+    except ApenkaasFout:
+        raise fout(503, "apenkaas_onbereikbaar", "Apenkaas is even niet bereikbaar")
+
+
+@app.get("/signaal")
+async def signaal_voor_display(sleutel: str | None = Query(None),
+                               cred: HTTPAuthorizationCredentials | None = Depends(bearer)) -> dict:
+    """Voor displays: alleen met een display-sleutel; fouten als signaal 'fout' (HTTP 200)."""
+    try:
+        uid = await gebruiker_van_sleutel(cred.credentials if cred else sleutel)
+    except ApenkaasFout:
+        return accu_dienst.fout_antwoord("Apenkaas is even niet bereikbaar")
+    if uid is None:
+        raise fout(401, "sleutel_ongeldig", "Onbekende display-sleutel")
+    try:
+        k = await koppeling_van(uid)
+        return await accu_dienst.nu(uid, k)
+    except HTTPException as e:
+        return accu_dienst.fout_antwoord(e.detail.get("melding", "Geen actuele gegevens"))
+    except ApenkaasFout:
+        return accu_dienst.fout_antwoord("Apenkaas is even niet bereikbaar")

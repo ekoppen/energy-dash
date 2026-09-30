@@ -1,7 +1,7 @@
 // saldering-model.test.ts — draai met vitest.
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
 import { buildTypicalYear, HourRecord, simulateShifted } from "../accu/battery-model";
+import gevallen from "../../../../testdata/accu-gevallen.json";
 import {
   sumTotals,
   billWithSaldering,
@@ -118,7 +118,6 @@ describe("prijsNu", () => {
 });
 
 describe("gedeelde accu-testgevallen (gelijk aan backend/virtuele_accu.py)", () => {
-  const gevallen = JSON.parse(readFileSync(new URL("../../../../testdata/accu-gevallen.json", import.meta.url), "utf8"));
   for (const g of gevallen) {
     it(g.naam, () => {
       expect(simulateShifted(g.uren, { capacity: g.capaciteit, roundTrip: g.rendement })).toBeCloseTo(g.verschoven, 6);

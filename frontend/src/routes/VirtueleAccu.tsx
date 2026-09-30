@@ -23,7 +23,7 @@ export default function VirtueleAccu() {
   const [sleutelActief, setSleutelActief] = useState(false);
   const [nieuweSleutel, setNieuweSleutel] = useState<string | null>(null);
 
-  const haal = () => api.accu().then((d) => { setData(d); setMelding(null); }).catch((e) => {
+  const haal = (vers = false) => api.accu(vers).then((d) => { setData(d); setMelding(null); }).catch((e) => {
     if (e instanceof ApiFout && (e.code === "geen_koppeling" || e.code === "ha_token")) { setGeenKoppeling(true); return "stop"; }
     setMelding(e instanceof Error ? e.message : String(e));
   });
@@ -42,7 +42,7 @@ export default function VirtueleAccu() {
 
   const bewaar = async () => {
     if (!docId) return;
-    try { await bewaarInstellingen(docId, { virtuele_accu: inst }); setMelding("Opgeslagen ✓ — opnieuw doorgerekend"); await haal(); }
+    try { await bewaarInstellingen(docId, { virtuele_accu: inst }); setMelding("Opgeslagen ✓ — opnieuw doorgerekend"); await haal(true); }
     catch (e) { setMelding(e instanceof Error ? e.message : String(e)); }
   };
 

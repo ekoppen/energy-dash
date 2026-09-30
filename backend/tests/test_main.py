@@ -197,13 +197,16 @@ def _nep_dienst(monkeypatch, nu=None, fout=None):
                 raise fout
             return nu or {"signaal": "rustig"}
 
-        async def volledig(self, uid, k):
+        async def volledig(self, uid, k, vers=False):
+            self.vers = vers
             return {"nu": {"signaal": "rustig"}, "instellingen": {}, "totaal": None, "dagen": []}
 
         def fout_antwoord(self, melding):
             return {"signaal": "fout", "advies": melding}
 
-    monkeypatch.setattr(main, "accu_dienst", Nep())
+    nep = Nep()
+    monkeypatch.setattr(main, "accu_dienst", nep)
+    return nep
 
 
 def test_signaal_met_sleutel_header_en_query(client, monkeypatch):
@@ -249,6 +252,15 @@ def test_accu_vereist_inlog_en_koppeling(client, monkeypatch):
     _nep_dienst(monkeypatch)
     assert client.get("/accu").status_code == 401
     assert client.get("/accu", headers=AUTH).json()["dagen"] == []
+
+
+def test_accu_vers_wordt_doorgegeven(client, monkeypatch):
+    monkeypatch.setattr(main, "apenkaas", NepApenkaas(KOPPELING))
+    nep = _nep_dienst(monkeypatch)
+    client.get("/accu", headers=AUTH)
+    assert nep.vers is False
+    client.get("/accu?vers=1", headers=AUTH)
+    assert nep.vers is True
 
 
 def test_display_sleutel_werkt_niet_op_andere_routes(client, monkeypatch):

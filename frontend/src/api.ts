@@ -30,7 +30,7 @@ export interface AccuDag { datum: string; opbrengst_eur: number; geladen_kwh: nu
 export interface AccuData { instellingen: { startdatum: string | null; capaciteit_kwh: number; rendement_pct: number; max_vermogen_kw: number; drempel_w: number }; nu: Signaal; totaal: { met_saldering: number; zonder_saldering: number; minder_teruggeleverd_kwh: number; minder_ingekocht_kwh: number; cycli: number } | null; dagen: AccuDag[] }
 
 export const api = {
-  accu: () => call<AccuData>("/accu"),
+  accu: (vers = false) => call<AccuData>(vers ? "/accu?vers=1" : "/accu"),
   displaySleutel: {
     get: () => call<{ actief: boolean }>("/display-sleutel"),
     maak: () => call<{ sleutel: string }>("/display-sleutel", { method: "POST" }),

@@ -291,9 +291,9 @@ accu_dienst = AccuDienst(_lees_instellingen, _nu_van, _uren_van)
 
 
 @app.get("/accu")
-async def accu(uid: str = Depends(current_user), k: dict = Depends(koppeling_van)) -> dict:
+async def accu(uid: str = Depends(current_user), k: dict = Depends(koppeling_van), vers: bool = Query(False)) -> dict:
     try:
-        return await accu_dienst.volledig(uid, k)
+        return await accu_dienst.volledig(uid, k, vers=vers)
     except ApenkaasFout:
         raise fout(503, "apenkaas_onbereikbaar", "Apenkaas is even niet bereikbaar")
 

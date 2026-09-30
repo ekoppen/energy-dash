@@ -27,7 +27,7 @@ def dienst(inst=None, uren=None, vermogen=-2000, klok=None):
     async def lees(uid):
         tellers["inst"] += 1
         return {"tarief_piek": 0.25, "tarief_dal": 0.2, "tarief_teruglevering": 0.06,
-                "virtuele_accu": inst if inst is not None else {"startdatum": "2026-09-29", "capaciteit_kwh": 10}}
+                "virtuele_accu": dict(inst) if inst is not None else {"startdatum": "2026-09-29", "capaciteit_kwh": 10}}
 
     async def nu(k):
         tellers["nu"] += 1
@@ -97,3 +97,12 @@ def test_volledig_bevat_dagen_en_totaal():
     assert v["instellingen"]["capaciteit_kwh"] == 10
     assert v["dagen"][0]["datum"] == "2026-09-29"
     assert v["totaal"]["minder_teruggeleverd_kwh"] == pytest.approx(3)
+
+
+def test_volledig_vers_slaat_instellingencache_over():
+    inst = {"startdatum": "2026-09-29", "capaciteit_kwh": 10}
+    d, _, _ = dienst(inst=inst)
+    assert asyncio.run(d.volledig("u1", K))["instellingen"]["capaciteit_kwh"] == 10
+    inst["capaciteit_kwh"] = 5
+    assert asyncio.run(d.volledig("u1", K))["instellingen"]["capaciteit_kwh"] == 10
+    assert asyncio.run(d.volledig("u1", K, vers=True))["instellingen"]["capaciteit_kwh"] == 5

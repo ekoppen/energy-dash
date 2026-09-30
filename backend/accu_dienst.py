@@ -105,7 +105,9 @@ class AccuDienst:
         antwoord, _, _ = await self._alles(uid, k)
         return antwoord
 
-    async def volledig(self, uid: str, k: dict) -> dict:
+    async def volledig(self, uid: str, k: dict, vers: bool = False) -> dict:
+        if vers:
+            self._inst.pop(uid, None)
         antwoord, berekening, inst = await self._alles(uid, k)
         instellingen = asdict(inst)
         instellingen["startdatum"] = inst.startdatum.isoformat() if inst.startdatum else None

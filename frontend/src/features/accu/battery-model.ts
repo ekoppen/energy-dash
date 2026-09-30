@@ -7,6 +7,8 @@ export interface HourRecord {
   imp: number;
   /** netto export dat uur (kWh) — wat je terugleverde */
   exp: number;
+  /** deel van imp op het daltarief (kWh); alleen bij live HA-data */
+  imp_dal?: number;
 }
 
 export interface BatterySpec {

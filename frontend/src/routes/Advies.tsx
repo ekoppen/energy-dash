@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import AccuSimulatie from "../features/accu/AccuSimulatie";
 import SalderingImpact from "../features/saldering/SalderingImpact";
+import { gemiddeldInkooptarief } from "../features/saldering/saldering-model";
 import { HourRecord, parseHourCsv } from "../features/accu/battery-model";
 import { api } from "../api";
 import { AdviesWaarden, bewaarInstellingen, Instellingen, laadInstellingen } from "../instellingen";
@@ -71,8 +72,9 @@ export default function Advies() {
   const props = {
     liveHours: hours,
     liveHoursSpan: hours?.length,
-    defaultPriceImport: doc?.data.tarief_piek ?? 0.2544,
+    defaultPriceImport: gemiddeldInkooptarief(hours ?? csvHours ?? undefined, doc?.data.tarief_piek ?? 0.2544, doc?.data.tarief_dal ?? 0.2337),
     defaultPriceFeedIn: doc?.data.tarief_teruglevering ?? 0.06,
+    defaultExportCost: doc?.data.tarief_terugleverkosten ?? 0,
     initial: doc?.data.advies,
     onChange,
     initialCsvHours: csvHours,
@@ -86,7 +88,8 @@ export default function Advies() {
         <button style={tabBtn(tab === "accu")} onClick={() => setTab("accu")}>Accu-analyse</button>
         {melding && <span role="status" style={{ color: "#e8654f", fontSize: 13, marginLeft: 12 }}>{melding}</span>}
       </div>
-      {tab === "saldering" ? <SalderingImpact {...props} /> : <AccuSimulatie {...props} />}
+      {/* key: opnieuw opbouwen zodra live uurdata binnenkomt, zodat de gewogen inkoopprijs meeloopt */}
+      {tab === "saldering" ? <SalderingImpact key={hours ? "live" : "geen"} {...props} /> : <AccuSimulatie key={hours ? "live" : "geen"} {...props} />}
     </div>
   );
 }

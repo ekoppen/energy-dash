@@ -25,6 +25,7 @@ export interface SalderingImpactProps {
   liveHoursSpan?: number;
   defaultPriceImport?: number;
   defaultPriceFeedIn?: number;
+  defaultExportCost?: number;
   initial?: Partial<AdviesWaarden>;
   onChange?: (w: Partial<AdviesWaarden>) => void;
   initialCsvHours?: HourRecord[] | null;
@@ -46,10 +47,12 @@ export default function SalderingImpact({
   liveHoursSpan,
   defaultPriceImport = 0.2544,
   defaultPriceFeedIn = 0.06,
+  defaultExportCost = 0,
   initial, onChange, initialCsvHours, onCsv,
 }: SalderingImpactProps) {
   const [priceImport, setPriceImport] = useState(defaultPriceImport);
   const [priceFeedIn, setPriceFeedIn] = useState(defaultPriceFeedIn);
+  const [exportCost, setExportCost] = useState(defaultExportCost);
   const [exportYear, setExportYear] = useState(initial?.exportYear ?? 4500);
   const [importYear, setImportYear] = useState(initial?.importYear ?? 3500);
   const [capacity, setCapacity] = useState(initial?.capacity ?? 10);
@@ -74,11 +77,11 @@ export default function SalderingImpact({
     [usingReal, effectiveHours, liveHoursSpan]
   );
 
-  const tariffs: Tariffs = { priceImport, priceFeedIn };
+  const tariffs: Tariffs = { priceImport, priceFeedIn, exportCost };
 
   const impact = useMemo(
     () => analyseSaldering({ hours, tariffs, yearScale }),
-    [hours, priceImport, priceFeedIn, yearScale]
+    [hours, priceImport, priceFeedIn, exportCost, yearScale]
   );
   const battery = useMemo(
     () =>
@@ -89,11 +92,11 @@ export default function SalderingImpact({
         yearlyImpact: impact.yearlyImpact,
         yearScale,
       }),
-    [hours, capacity, roundTrip, priceImport, priceFeedIn, impact.yearlyImpact, yearScale]
+    [hours, capacity, roundTrip, priceImport, priceFeedIn, exportCost, impact.yearlyImpact, yearScale]
   );
   const behaviour = useMemo(
     () => behaviourEffect({ totals: impact.totals, tariffs, shiftFraction: shiftPct / 100 }),
-    [impact.totals, priceImport, priceFeedIn, shiftPct]
+    [impact.totals, priceImport, priceFeedIn, exportCost, shiftPct]
   );
 
   const sourceLabel = liveHours
@@ -185,8 +188,9 @@ export default function SalderingImpact({
         <div style={{ display: "grid", gridTemplateColumns: usingReal ? "1fr" : "1fr 1fr", gap: 20, marginTop: 20 }}>
           <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 16, padding: 20 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: C.sub, marginBottom: 14, textTransform: "uppercase", letterSpacing: 1 }}>Tarieven</div>
-            <Slider label="Inkooptarief stroom" value={priceImport} set={setPriceImport} min={0.1} max={0.45} step={0.005} unit="€/kWh" color={C.import} />
+            <Slider label="Inkooptarief stroom (gemiddeld piek/dal)" value={priceImport} set={setPriceImport} min={0.1} max={0.45} step={0.005} unit="€/kWh" color={C.import} />
             <Slider label="Teruglevertarief" value={priceFeedIn} set={setPriceFeedIn} min={0} max={0.25} step={0.005} unit="€/kWh" color={C.export} />
+            <Slider label="Terugleverkosten" value={exportCost} set={setExportCost} min={0} max={0.25} step={0.005} unit="€/kWh" color={C.bad} />
           </div>
           {!usingReal && (
             <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 16, padding: 20 }}>

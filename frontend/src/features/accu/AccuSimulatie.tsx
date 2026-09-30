@@ -11,6 +11,7 @@ export interface AccuSimulatieProps {
   liveHoursSpan?: number;
   defaultPriceImport?: number;
   defaultPriceFeedIn?: number;
+  defaultExportCost?: number;
   initial?: Partial<AdviesWaarden>;
   onChange?: (w: Partial<AdviesWaarden>) => void;
   initialCsvHours?: HourRecord[] | null;
@@ -28,11 +29,12 @@ const euro2 = (n: number) => "€ " + n.toLocaleString("nl-NL", { minimumFractio
 const kwh = (n: number) => Math.round(n).toLocaleString("nl-NL") + " kWh";
 
 export default function AccuSimulatie({
-  liveHours, liveHoursSpan, defaultPriceImport = 0.2544, defaultPriceFeedIn = 0.06,
+  liveHours, liveHoursSpan, defaultPriceImport = 0.2544, defaultPriceFeedIn = 0.06, defaultExportCost = 0,
   initial, onChange, initialCsvHours, onCsv,
 }: AccuSimulatieProps) {
   const [priceImport, setPriceImport] = useState(defaultPriceImport);
   const [priceFeedIn, setPriceFeedIn] = useState(defaultPriceFeedIn);
+  const [exportCost, setExportCost] = useState(defaultExportCost);
   const [saldering, setSaldering] = useState<"nu" | "af2027">(initial?.saldering ?? "af2027");
   const [exportYear, setExportYear] = useState(initial?.exportYear ?? 4500);
   const [importYear, setImportYear] = useState(initial?.importYear ?? 3500);
@@ -60,16 +62,17 @@ export default function AccuSimulatie({
 
   const r = useMemo(() => {
     const shifted = simulateShifted(hours, { capacity, roundTrip: roundTrip / 100 }) * yearScale;
-    const valuePerKwh = saldering === "nu"
+    // Terugleverkosten vermijdt de accu altijd volledig, ook met saldering.
+    const valuePerKwh = (saldering === "nu"
       ? (priceImport - priceFeedIn) * 0.15
-      : priceImport - priceFeedIn;
+      : priceImport - priceFeedIn) + exportCost;
     const yearly = shifted * valuePerKwh;
     const payback = yearly > 0 ? price / yearly : Infinity;
     const net = yearly * lifespan - price;
     const roi = (net / price) * 100;
     const caught = (shifted / Math.max(exportYear, 1)) * 100;
     return { shifted, valuePerKwh, yearly, payback, net, roi, caught };
-  }, [hours, capacity, roundTrip, yearScale, saldering, priceImport, priceFeedIn, price, lifespan, exportYear]);
+  }, [hours, capacity, roundTrip, yearScale, saldering, priceImport, priceFeedIn, exportCost, price, lifespan, exportYear]);
 
   const ok = r.payback <= lifespan;
   const sourceLabel = liveHours ? "live uit Home Assistant ✓" : csvHours ? "geüploade CSV ✓" : "schatting uit jaartotalen";
@@ -116,8 +119,9 @@ export default function AccuSimulatie({
             <Slider label="Rendement" value={roundTrip} set={setRoundTrip} min={70} max={98} step={1} unit="%" color={C.accent} />
           </Panel>
           <Panel title="Tarieven & verbruik">
-            <Slider label="Inkooptarief" value={priceImport} set={setPriceImport} min={0.1} max={0.45} step={0.005} unit="€/kWh" color={C.import} />
+            <Slider label="Inkooptarief (gemiddeld piek/dal)" value={priceImport} set={setPriceImport} min={0.1} max={0.45} step={0.005} unit="€/kWh" color={C.import} />
             <Slider label="Teruglevertarief" value={priceFeedIn} set={setPriceFeedIn} min={0} max={0.25} step={0.005} unit="€/kWh" color={C.export} />
+            <Slider label="Terugleverkosten" value={exportCost} set={setExportCost} min={0} max={0.25} step={0.005} unit="€/kWh" color={C.bad} />
             <Slider label="Teruglevering/jaar" value={exportYear} set={setExportYear} min={0} max={10000} step={100} unit="kWh" color={C.export} disabled={usingReal} />
             <Slider label="Verbruik/jaar" value={importYear} set={setImportYear} min={0} max={12000} step={100} unit="kWh" color={C.import} disabled={usingReal} />
           </Panel>

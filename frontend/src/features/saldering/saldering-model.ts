@@ -16,6 +16,38 @@ export interface Tariffs {
   priceImport: number;
   /** teruglevertarief na saldering, €/kWh (Coolblue: 0.06) */
   priceFeedIn: number;
+  /** terugleverkosten van de leverancier, €/kWh over alle teruglevering (default 0) */
+  exportCost?: number;
+}
+
+/** Wat elke teruggeleverde kWh aan terugleverkosten kost. */
+// ponytail: kosten over álle teruglevering, zoals de meeste leveranciers nu rekenen;
+// sommige rekenen alleen over het netto-overschot of een staffel — voeg dat toe als het nodig is.
+function exportCosts(t: SalderingTotals, tar: Tariffs): number {
+  return t.gridExport * (tar.exportCost ?? 0);
+}
+
+/** Waarde van een kWh die je zelf gebruikt i.p.v. terug te leveren (zonder saldering). */
+function shiftedKwhValue(tar: Tariffs): number {
+  return tar.priceImport - tar.priceFeedIn + (tar.exportCost ?? 0);
+}
+
+/**
+ * Gemiddeld inkooptarief, gewogen naar het echte dal-aandeel van de import
+ * (imp_dal uit de P1-teller T1). Zonder dal-gegevens (CSV/schatting): het
+ * gemiddelde van piek en dal.
+ */
+export function gemiddeldInkooptarief(hours: HourRecord[] | undefined, piek: number, dal: number): number {
+  let imp = 0;
+  let impDal = 0;
+  let heeftDal = false;
+  for (const h of hours ?? []) {
+    imp += h.imp;
+    if (h.imp_dal !== undefined) { impDal += h.imp_dal; heeftDal = true; }
+  }
+  if (!heeftDal || imp <= 0) return (piek + dal) / 2;
+  const aandeelDal = impDal / imp;
+  return aandeelDal * dal + (1 - aandeelDal) * piek;
 }
 
 export interface SalderingTotals {
@@ -78,14 +110,14 @@ export function billWithSaldering(t: SalderingTotals, tar: Tariffs): BillBreakdo
   const surplus = Math.max(0, t.gridExport - t.gridImport);
   const importCost = t.gridImport * tar.priceImport;
   // Gesaldeerde export bespaart vol tarief; surplus levert teruglevertarief op.
-  const exportValue = salderable * tar.priceImport + surplus * tar.priceFeedIn;
+  const exportValue = salderable * tar.priceImport + surplus * tar.priceFeedIn - exportCosts(t, tar);
   return { importCost, exportValue, net: importCost - exportValue };
 }
 
 /** Rekening ZONDER saldering: alle export telt alleen tegen teruglevertarief. */
 export function billWithoutSaldering(t: SalderingTotals, tar: Tariffs): BillBreakdown {
   const importCost = t.gridImport * tar.priceImport;
-  const exportValue = t.gridExport * tar.priceFeedIn;
+  const exportValue = t.gridExport * tar.priceFeedIn - exportCosts(t, tar);
   return { importCost, exportValue, net: importCost - exportValue };
 }
 
@@ -150,8 +182,9 @@ export function batteryRecovery(opts: {
 
   const shiftedKwh = simulateShifted(hours, spec) * yearScale;
   // Elke verschoven kWh: je gebruikt 'm zelf (vermijdt inkoop, vol tarief)
-  // i.p.v. 'm voor het lage teruglevertarief weg te geven.
-  const valuePerKwh = tariffs.priceImport - tariffs.priceFeedIn;
+  // i.p.v. 'm voor het lage teruglevertarief weg te geven (en er
+  // terugleverkosten over te betalen).
+  const valuePerKwh = shiftedKwhValue(tariffs);
   const recoveredPerYear = shiftedKwh * valuePerKwh;
   const remainingImpact = Math.max(0, yearlyImpact - recoveredPerYear);
 
@@ -185,6 +218,33 @@ export function behaviourEffect(opts: {
   const { totals, tariffs, shiftFraction } = opts;
   const f = Math.min(1, Math.max(0, shiftFraction));
   const shiftedKwh = totals.gridExport * f;
-  const savingPerYear = shiftedKwh * (tariffs.priceImport - tariffs.priceFeedIn);
+  const savingPerYear = shiftedKwh * shiftedKwhValue(tariffs);
   return { shiftFraction: f, shiftedKwh, savingPerYear };
+}
+
+// ---------------------------------------------------------------------------
+// Live: wat is een kWh op dit moment waard (Overzicht)?
+// ---------------------------------------------------------------------------
+
+export const SALDERING_STOPT = new Date("2027-01-01T00:00:00+01:00");
+
+/**
+ * Prijs of waarde per kWh op dit moment. Bij afname: je inkooptarief.
+ * Bij teruglevering: t/m 2026 gesaldeerd (je inkooptarief), daarna de
+ * terugleververgoeding — in beide gevallen min de terugleverkosten.
+ */
+// ponytail: live weten we niet of je dit jaar al boven je import uitkomt (dan is
+// ook nu alleen de vergoeding van toepassing); daarvoor is het jaarsaldo nodig.
+export function prijsNu(o: {
+  inkooptarief: number;
+  terugleververgoeding: number;
+  terugleverkosten: number;
+  teruglevert: boolean;
+  moment: Date;
+}): { waarde: number; uitleg: string } {
+  if (!o.teruglevert) return { waarde: o.inkooptarief, uitleg: "per kWh, jouw inkooptarief" };
+  if (o.moment < SALDERING_STOPT) {
+    return { waarde: o.inkooptarief - o.terugleverkosten, uitleg: "per teruggeleverde kWh: gesaldeerd, min terugleverkosten" };
+  }
+  return { waarde: o.terugleververgoeding - o.terugleverkosten, uitleg: "per teruggeleverde kWh: vergoeding min terugleverkosten" };
 }

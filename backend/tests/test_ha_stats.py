@@ -56,3 +56,17 @@ def test_hours_niet_hastatserror_wordt_502(client, monkeypatch):  # noqa: F811
 def test_hours_days_buiten_bereik_422(client, monkeypatch, days):  # noqa: F811
     monkeypatch.setattr(main, "apenkaas", NepApenkaas(KOPPELING))
     assert client.get(f"/hours?days={days}", headers=AUTH).status_code == 422
+
+
+def test_combine_splits_dal_import_per_hour():
+    from ha_stats import combine_import_export
+    stats = {
+        "imp_t1": [{"start": 1, "change": 0.4}, {"start": 2, "change": 0.0}],
+        "imp_t2": [{"start": 2, "change": 0.7}],
+        "exp_t1": [{"start": 1, "change": 0.1}],
+    }
+    records = combine_import_export(stats, ["imp_t1", "imp_t2"], ["exp_t1"], dal_import_ids=["imp_t1"])
+    assert records == [
+        {"imp": 0.4, "exp": 0.1, "imp_dal": 0.4},
+        {"imp": 0.7, "exp": 0.0, "imp_dal": 0.0},
+    ]

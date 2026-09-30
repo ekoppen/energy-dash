@@ -197,7 +197,7 @@ async def hours(days: int = Query(365, ge=1, le=730), k: dict = Depends(koppelin
     except Exception as err:  # ook OSError, timeouts, redirects: nooit HA-tekst terug naar de gebruiker
         log.warning("uurstatistieken mislukt: %r", err)
         raise fout(502, "ha_onbereikbaar", "Uur-statistieken ophalen mislukt")
-    records = combine_import_export(stats, import_ids, export_ids)
+    records = combine_import_export(stats, import_ids, export_ids, dal_import_ids=[e["import_t1"]])
     if not records:
         raise fout(422, "geen_uurdata", "Home Assistant heeft (nog) geen uur-statistieken voor de P1-meter")
     return records

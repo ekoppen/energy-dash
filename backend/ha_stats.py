@@ -108,10 +108,12 @@ def combine_import_export(
     stats: dict[str, list[dict]],
     import_ids: list[str],
     export_ids: list[str],
+    dal_import_ids: list[str] = (),
 ) -> list[dict]:
     """
-    Combineert de per-entiteit buckets tot één reeks {imp, exp} per uur,
-    uitgelijnd op starttijd. Ontbrekende waarden tellen als 0.
+    Combineert de per-entiteit buckets tot één reeks {imp, exp, imp_dal} per uur,
+    uitgelijnd op starttijd. Ontbrekende waarden tellen als 0. imp_dal is het
+    deel van imp dat op het daltarief (P1-teller T1) binnenkwam.
     """
     def index_by_start(ids: list[str]) -> dict[str, float]:
         acc: dict[str, float] = {}
@@ -127,9 +129,14 @@ def combine_import_export(
 
     imp_by_start = index_by_start(import_ids)
     exp_by_start = index_by_start(export_ids)
+    dal_by_start = index_by_start(list(dal_import_ids))
 
-    all_starts = sorted(set(imp_by_start) | set(exp_by_start))
-    return [
-        {"imp": max(0.0, imp_by_start.get(s, 0.0)), "exp": max(0.0, exp_by_start.get(s, 0.0))}
-        for s in all_starts
-    ]
+    records = []
+    for s in sorted(set(imp_by_start) | set(exp_by_start)):
+        imp = max(0.0, imp_by_start.get(s, 0.0))
+        records.append({
+            "imp": imp,
+            "exp": max(0.0, exp_by_start.get(s, 0.0)),
+            "imp_dal": min(imp, max(0.0, dal_by_start.get(s, 0.0))),
+        })
+    return records

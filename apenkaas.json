@@ -5,7 +5,8 @@
       "schema": [
         { "key": "tarief_piek", "type": "number" },
         { "key": "tarief_dal", "type": "number" },
-        { "key": "tarief_teruglevering", "type": "number" }
+        { "key": "tarief_teruglevering", "type": "number" },
+        { "key": "tarief_terugleverkosten", "type": "number" }
       ],
       "createPermissions": ["users"],
       "env": ["VITE_APENKAAS_INSTELLINGEN_COLLECTION_ID"]

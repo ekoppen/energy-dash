@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiFout, NowData } from "../api";
 import { Instellingen, laadInstellingen, STANDAARD } from "../instellingen";
+import { prijsNu } from "../features/saldering/saldering-model";
 
 // Overzichtsdashboard (scherm 1). Toont de live situatie uit de backend.
 // Dit is een startpunt: fase 2 van docs/PLAN.md breidt dit uit met dag-/
@@ -32,7 +33,13 @@ export default function Overzicht() {
   }, []);
 
   const teruglevert = now ? now.vermogen_w < 0 : false;
-  const prijs = now ? (now.actief_tarief === "dal" ? tar.tarief_dal : tar.tarief_piek) : 0;
+  const prijs = prijsNu({
+    inkooptarief: now?.actief_tarief === "dal" ? tar.tarief_dal : tar.tarief_piek,
+    terugleververgoeding: tar.tarief_teruglevering,
+    terugleverkosten: tar.tarief_terugleverkosten,
+    teruglevert,
+    moment: new Date(),
+  });
 
   return (
     <div style={{ background: C.bg, minHeight: "100%", padding: "32px 20px", fontFamily: "'Inter', system-ui, sans-serif", color: C.ink }}>
@@ -59,7 +66,7 @@ export default function Overzicht() {
               color={teruglevert ? C.export : C.import}
               hint={teruglevert ? "je levert terug 🟢" : "je neemt af 🔴"} />
             <Card label="Actief tarief" value={now.actief_tarief === "dal" ? "Dal" : "Piek"} color={C.ink} />
-            <Card label="Prijs nu" value={euro(prijs)} color={C.accent} hint="per kWh, jouw tarief" />
+            <Card label={teruglevert ? "Waarde teruglevering nu" : "Prijs nu"} value={euro(prijs.waarde)} color={teruglevert ? C.export : C.accent} hint={prijs.uitleg} />
           </div>
         )}
 

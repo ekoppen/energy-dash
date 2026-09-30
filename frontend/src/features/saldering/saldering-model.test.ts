@@ -8,6 +8,8 @@ import {
   analyseSaldering,
   batteryRecovery,
   behaviourEffect,
+  gemiddeldInkooptarief,
+  prijsNu,
 } from "./saldering-model";
 
 const tar = { priceImport: 0.2544, priceFeedIn: 0.06 };
@@ -70,5 +72,46 @@ describe("behaviourEffect", () => {
     const totals = { gridImport: 3500, gridExport: 4500, selfConsumed: 0 };
     const over = behaviourEffect({ totals, tariffs: tar, shiftFraction: 1.5 });
     expect(over.shiftFraction).toBe(1);
+  });
+});
+
+describe("terugleverkosten", () => {
+  const t = { gridImport: 1000, gridExport: 1500, selfConsumed: 0 };
+  const metKosten = { ...tar, exportCost: 0.1 };
+
+  it("gaan in beide scenario's af van de waarde van alle teruglevering", () => {
+    expect(billWithSaldering(t, metKosten).exportValue).toBeCloseTo(1000 * 0.2544 + 500 * 0.06 - 1500 * 0.1, 4);
+    expect(billWithoutSaldering(t, metKosten).exportValue).toBeCloseTo(1500 * 0.06 - 1500 * 0.1, 4);
+  });
+
+  it("maken een verschoven kWh (accu, gedrag) meer waard", () => {
+    const zonder = behaviourEffect({ totals: t, tariffs: tar, shiftFraction: 0.5 });
+    const met = behaviourEffect({ totals: t, tariffs: metKosten, shiftFraction: 0.5 });
+    expect(met.savingPerYear - zonder.savingPerYear).toBeCloseTo(750 * 0.1, 4);
+  });
+});
+
+describe("gemiddeldInkooptarief", () => {
+  it("weegt piek en dal naar het echte dal-aandeel van de import", () => {
+    const hours: HourRecord[] = [{ imp: 3, exp: 0, imp_dal: 3 }, { imp: 1, exp: 0, imp_dal: 0 }];
+    expect(gemiddeldInkooptarief(hours, 0.3, 0.2)).toBeCloseTo(0.75 * 0.2 + 0.25 * 0.3, 6);
+  });
+
+  it("valt terug op het gemiddelde van piek en dal zonder dal-gegevens", () => {
+    expect(gemiddeldInkooptarief([{ imp: 1, exp: 0 }], 0.3, 0.2)).toBeCloseTo(0.25, 6);
+    expect(gemiddeldInkooptarief(undefined, 0.3, 0.2)).toBeCloseTo(0.25, 6);
+  });
+});
+
+describe("prijsNu", () => {
+  const basis = { inkooptarief: 0.25, terugleververgoeding: 0.06, terugleverkosten: 0.1 };
+  it("toont bij afname het inkooptarief", () => {
+    expect(prijsNu({ ...basis, teruglevert: false, moment: new Date("2026-09-30") }).waarde).toBe(0.25);
+  });
+  it("saldeert teruglevering t/m 2026, min terugleverkosten", () => {
+    expect(prijsNu({ ...basis, teruglevert: true, moment: new Date("2026-12-31T12:00:00+01:00") }).waarde).toBeCloseTo(0.15, 6);
+  });
+  it("geeft vanaf 2027 alleen de vergoeding, min terugleverkosten (kan negatief)", () => {
+    expect(prijsNu({ ...basis, teruglevert: true, moment: new Date("2027-01-01T00:00:00+01:00") }).waarde).toBeCloseTo(-0.04, 6);
   });
 });

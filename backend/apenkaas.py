@@ -72,6 +72,51 @@ class Apenkaas:
         if r.status_code not in (200, 404):
             raise ApenkaasFout(f"koppeling verwijderen gaf {r.status_code}")
 
+    async def documenten(self, collection_id: str, filters: dict[str, str] | None = None) -> list[dict]:
+        """Alle documenten die de server-sleutel mag lezen, over alle pagina's."""
+        alles: list[dict] = []
+        while True:
+            params = {**(filters or {}), "limit": "1000", "offset": str(len(alles))}
+            r = await self._request("GET", f"/collections/{collection_id}/documents",
+                                    headers=self._server, params=params)
+            if r.status_code != 200:
+                raise ApenkaasFout(f"documenten lezen gaf {r.status_code}")
+            pagina = r.json()["documents"]
+            alles += pagina
+            if len(pagina) < 1000:
+                return alles
+
+    async def document(self, collection_id: str, doc_id: str) -> dict | None:
+        r = await self._request("GET", f"/collections/{collection_id}/documents/{doc_id}", headers=self._server)
+        if r.status_code == 404:
+            return None
+        if r.status_code != 200:
+            raise ApenkaasFout(f"document lezen gaf {r.status_code}")
+        return r.json()
+
+    async def maak_document(self, collection_id: str, doc_id: str, data: dict,
+                            lees: list[str], schrijf: list[str]) -> None:
+        r = await self._request("POST", f"/collections/{collection_id}/documents", headers=self._server, json={
+            "id": doc_id, "data": data, "readPermissions": lees, "writePermissions": schrijf,
+        })
+        if r.status_code != 200:
+            raise ApenkaasFout(f"document aanmaken gaf {r.status_code}")
+
+    async def verwijder_document(self, collection_id: str, doc_id: str) -> None:
+        r = await self._request("DELETE", f"/collections/{collection_id}/documents/{doc_id}", headers=self._server)
+        if r.status_code not in (200, 404):
+            raise ApenkaasFout(f"document verwijderen gaf {r.status_code}")
+
     async def aclose(self) -> None:
         """Close the async HTTP client."""
         await self._client.aclose()
+
+
+def kies_instellingen(docs: list[dict], user_id: str) -> dict | None:
+    """
+    Het instellingen-document van deze gebruiker: alleen documenten waarin user:<id>
+    mag schrijven. Gebruikers kunnen geen rechten voor een ander toekennen (apenkaas),
+    dus niemand kan een document namens een ander neerzetten.
+    """
+    eigen = [d for d in docs if f"user:{user_id}" in d.get("write_permissions", [])]
+    return max(eigen, key=lambda d: d.get("bijgewerkt_op", ""), default=None)

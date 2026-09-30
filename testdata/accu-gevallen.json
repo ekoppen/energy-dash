@@ -1,0 +1,11 @@
+[
+  { "naam": "vult tot capaciteit en ontlaadt alles", "capaciteit": 5, "rendement": 1.0,
+    "uren": [{ "imp": 0, "exp": 3 }, { "imp": 0, "exp": 4 }, { "imp": 6, "exp": 0 }, { "imp": 2, "exp": 0 }],
+    "verschoven": 5 },
+  { "naam": "rendementsverlies half bij laden, half bij ontladen", "capaciteit": 10, "rendement": 0.81,
+    "uren": [{ "imp": 0, "exp": 10 }, { "imp": 10, "exp": 0 }],
+    "verschoven": 8.1 },
+  { "naam": "laden en ontladen in hetzelfde uur", "capaciteit": 10, "rendement": 1.0,
+    "uren": [{ "imp": 2, "exp": 3 }],
+    "verschoven": 2 }
+]

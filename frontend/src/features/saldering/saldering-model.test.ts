@@ -1,6 +1,7 @@
 // saldering-model.test.ts — draai met vitest.
 import { describe, it, expect } from "vitest";
-import { buildTypicalYear, HourRecord } from "../accu/battery-model";
+import { readFileSync } from "node:fs";
+import { buildTypicalYear, HourRecord, simulateShifted } from "../accu/battery-model";
 import {
   sumTotals,
   billWithSaldering,
@@ -114,4 +115,13 @@ describe("prijsNu", () => {
   it("geeft vanaf 2027 alleen de vergoeding, min terugleverkosten (kan negatief)", () => {
     expect(prijsNu({ ...basis, teruglevert: true, moment: new Date("2027-01-01T00:00:00+01:00") }).waarde).toBeCloseTo(-0.04, 6);
   });
+});
+
+describe("gedeelde accu-testgevallen (gelijk aan backend/virtuele_accu.py)", () => {
+  const gevallen = JSON.parse(readFileSync(new URL("../../../../testdata/accu-gevallen.json", import.meta.url), "utf8"));
+  for (const g of gevallen) {
+    it(g.naam, () => {
+      expect(simulateShifted(g.uren, { capacity: g.capaciteit, roundTrip: g.rendement })).toBeCloseTo(g.verschoven, 6);
+    });
+  }
 });

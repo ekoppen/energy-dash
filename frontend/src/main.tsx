@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { createBrowserRouter, RouterProvider, Link, Outlet } from "react-router-dom";
 import Overzicht from "./routes/Overzicht";
 import Advies from "./routes/Advies";
+import VirtueleAccu from "./routes/VirtueleAccu";
 import Login from "./routes/Login";
 import Instellingen from "./routes/Instellingen";
 import { logout, useSessie } from "./auth";
@@ -28,6 +29,7 @@ function Layout() {
       <nav style={nav}>
         <Link to="/" style={link(path === "/")}>Overzicht</Link>
         <Link to="/advies" style={link(path.startsWith("/advies"))}>Advies</Link>
+        <Link to="/accu" style={link(path.startsWith("/accu"))}>Virtuele accu</Link>
         <Link to="/instellingen" style={link(path.startsWith("/instellingen"))}>Instellingen</Link>
         <button onClick={() => logout()} style={{ ...link(false), marginLeft: "auto", border: "none", cursor: "pointer" }}>Uitloggen</button>
       </nav>
@@ -43,6 +45,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Overzicht /> },
       { path: "advies", element: <Advies /> },
+      { path: "accu", element: <VirtueleAccu /> },
       { path: "instellingen", element: <Instellingen /> },
     ],
   },

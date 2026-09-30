@@ -282,6 +282,9 @@ async def hours(days: int = Query(365, ge=1, le=730), k: dict = Depends(koppelin
     return records
 
 
+# ponytail: /signaal met een onbekende sleutel en een instellingen-cachemiss kosten elk een
+# apenkaas-aanroep; geen rate limit. Prima voor tientallen gebruikers, voeg er een toe
+# als dit publiek bereikbaar wordt.
 async def _lees_instellingen(uid: str) -> dict:
     doc = kies_instellingen(await apenkaas.documenten(settings.apenkaas_instellingen_collection_id), uid)
     return doc["data"] if doc else {}

@@ -25,7 +25,7 @@ describe("laadInstellingen", () => {
 
   it("vult ontbrekende velden aan met standaardwaarden", async () => {
     vi.stubGlobal("fetch", vi.fn(async () =>
-      new Response(JSON.stringify({ documents: [{ id: "d2", data: { tarief_piek: 0.3 }, read_permissions: ["user:u1", "app"] }] }), { status: 200 })));
+      new Response(JSON.stringify({ documents: [{ id: "d2", data: { tarief_piek: 0.3 }, read_permissions: ["user:u1", "app"], write_permissions: ["user:u1"] }] }), { status: 200 })));
     const { data } = await laadInstellingen();
     expect(data.tarief_piek).toBe(0.3);
     expect(data.tarief_dal).toBe(STANDAARD.tarief_dal);
@@ -41,7 +41,7 @@ describe("laadInstellingen", () => {
         serverData = JSON.parse(init.body as string).data;
         return new Response("{}", { status: 200 });
       }
-      return new Response(JSON.stringify({ documents: [{ id: "d3", data: serverData, read_permissions: ["user:u1", "app"] }] }), { status: 200 });
+      return new Response(JSON.stringify({ documents: [{ id: "d3", data: serverData, read_permissions: ["user:u1", "app"], write_permissions: ["user:u1"] }] }), { status: 200 });
     }));
     // Instellingen-pagina heeft een oude kopie zonder advies; Advies schrijft ondertussen
     await bewaarInstellingen("d3", { advies: { capacity: 14 } });
@@ -75,7 +75,7 @@ describe("leesrecht voor de server", () => {
       if (init?.method === "POST") { nieuwBody = JSON.parse(init.body as string); return new Response(JSON.stringify({ id: "n2" }), { status: 200 }); }
       if (init?.method === "DELETE") return new Response("{}", { status: 200 });
       return new Response(JSON.stringify({ documents: [
-        { id: "oud", data: { tarief_piek: 0.3 }, read_permissions: ["user:u1"] },
+        { id: "oud", data: { tarief_piek: 0.3 }, read_permissions: ["user:u1"], write_permissions: ["user:u1"] },
       ] }), { status: 200 });
     }));
     const { id, data } = await laadInstellingen();
@@ -92,13 +92,47 @@ describe("leesrecht voor de server", () => {
       if (init?.method === "POST") { posts++; return new Response("{}", { status: 200 }); }
       if (init?.method === "DELETE") { verwijderd.push(u.split("/").pop()!); return new Response("{}", { status: 200 }); }
       return new Response(JSON.stringify({ documents: [
-        { id: "oud", data: { tarief_piek: 0.3 }, read_permissions: ["user:u1"] },
-        { id: "nieuw", data: { tarief_piek: 0.3 }, read_permissions: ["user:u1", "app"] },
+        { id: "oud", data: { tarief_piek: 0.3 }, read_permissions: ["user:u1"], write_permissions: ["user:u1"] },
+        { id: "nieuw", data: { tarief_piek: 0.3 }, read_permissions: ["user:u1", "app"], write_permissions: ["user:u1"] },
       ] }), { status: 200 });
     }));
     const { id } = await laadInstellingen();
     expect(id).toBe("nieuw");
     expect(posts).toBe(0);
     expect(verwijderd).toEqual(["oud"]);
+  });
+
+  const VREEMD = { id: "vreemd", data: { tarief_piek: 9 }, read_permissions: ["any", "app"], write_permissions: ["user:aanvaller"] };
+
+  it("negeert een vreemd leesbaar document: eigen document mét app wordt gekozen, vreemd niet verwijderd", async () => {
+    const verwijderd: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (u: string, init?: RequestInit) => {
+      if (init?.method === "DELETE") { verwijderd.push(u.split("/").pop()!); return new Response("{}", { status: 200 }); }
+      return new Response(JSON.stringify({ documents: [
+        VREEMD,
+        { id: "eigen", data: { tarief_piek: 0.3 }, read_permissions: ["user:u1", "app"], write_permissions: ["user:u1"] },
+      ] }), { status: 200 });
+    }));
+    const { id, data } = await laadInstellingen();
+    expect(id).toBe("eigen");
+    expect(data.tarief_piek).toBe(0.3);
+    expect(verwijderd).not.toContain("vreemd");
+  });
+
+  it("negeert een vreemd document bij omzetten: kopieert de eigen data, verwijdert alleen het eigen oude document", async () => {
+    const verwijderd: string[] = [];
+    let nieuwBody: any;
+    vi.stubGlobal("fetch", vi.fn(async (u: string, init?: RequestInit) => {
+      if (init?.method === "POST") { nieuwBody = JSON.parse(init.body as string); return new Response(JSON.stringify({ id: "n3" }), { status: 200 }); }
+      if (init?.method === "DELETE") { verwijderd.push(u.split("/").pop()!); return new Response("{}", { status: 200 }); }
+      return new Response(JSON.stringify({ documents: [
+        VREEMD,
+        { id: "eigenoud", data: { tarief_piek: 0.3 }, read_permissions: ["user:u1"], write_permissions: ["user:u1"] },
+      ] }), { status: 200 });
+    }));
+    const { id } = await laadInstellingen();
+    expect(id).toBe("n3");
+    expect(nieuwBody.data.tarief_piek).toBe(0.3);
+    expect(verwijderd).toEqual(["eigenoud"]);
   });
 });

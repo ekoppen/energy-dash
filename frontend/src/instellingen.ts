@@ -33,7 +33,7 @@ async function ok(r: Response) {
   return r.json();
 }
 
-interface Doc { id: string; data: Partial<Instellingen>; read_permissions?: string[] }
+interface Doc { id: string; data: Partial<Instellingen>; read_permissions?: string[]; write_permissions?: string[] }
 
 function rechten() {
   const uid = getSessie()?.userId;
@@ -54,7 +54,11 @@ const verwijder = (id: string) => authFetch(`${DOCS}/${id}`, { method: "DELETE" 
 // met de juiste rechten. Blijft er door een half gelukte omzetting een extra kopie
 // over, dan wint het document mét app-leesrecht en gaat de rest weg.
 async function laad(): Promise<{ id: string; data: Instellingen }> {
-  const docs: Doc[] = (await ok(await authFetch(`${DOCS}?limit=10`))).documents;
+  const alle: Doc[] = (await ok(await authFetch(`${DOCS}?limit=100`))).documents;
+  // Alleen eigen documenten: een vreemd document dat via `any` leesbaar is, mag nooit
+  // gekozen of verwijderd worden.
+  const uid = getSessie()?.userId;
+  const docs = alle.filter((d) => (d.write_permissions ?? []).includes(`user:${uid}`));
   const goed = docs.find(heeftApp);
   if (goed) {
     for (const d of docs) if (d.id !== goed.id) await verwijder(d.id);

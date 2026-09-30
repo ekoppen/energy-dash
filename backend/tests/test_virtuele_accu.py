@@ -98,6 +98,7 @@ def test_accu_nu():
     (-4000, {"status": "laden", "vermogen_w": 2500}, "goed_moment"),   # rest 1500 > 300
     (-2000, {"status": "vol", "vermogen_w": 0}, "goed_moment"),
     (1500, {"status": "ontladen", "vermogen_w": 1500}, "accu_ontlaadt"),
+    (4000, {"status": "ontladen", "vermogen_w": 2500}, "afname"),   # rest 1500 > 300
     (1500, {"status": "leeg", "vermogen_w": 0}, "afname"),
     (1500, None, "afname"),
     (-200, None, "rustig"),

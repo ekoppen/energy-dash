@@ -71,6 +71,25 @@ def test_caches():
     assert tellers["uren"] == 2 and tellers["inst"] == 2
 
 
+def test_ha_fout_wordt_10_s_gecachet():
+    d, tellers, klok = dienst()
+    fout = RuntimeError("HA down")
+
+    async def kapot(k):
+        tellers["nu"] += 1
+        raise fout
+    d._haal_nu = kapot
+    for _ in range(2):
+        with pytest.raises(RuntimeError) as e:
+            asyncio.run(d.nu("u1", K))
+        assert e.value is fout
+    assert tellers["nu"] == 1
+    klok.t += 11
+    with pytest.raises(RuntimeError):
+        asyncio.run(d.nu("u1", K))
+    assert tellers["nu"] == 2
+
+
 def test_geen_uurdata_geeft_lege_accu():
     d, _, _ = dienst(uren=[])
     s = asyncio.run(d.nu("u1", K))

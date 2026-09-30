@@ -49,6 +49,10 @@ Via de console op http://192.168.178.202:3000/console:
    (of `?sleutel=<sleutel>` voor apparaten zonder headers; die vorm kan in de
    nginx-access-log belanden). Antwoord: `signaal`, `kleur` (hex), `advies`, en
    bij een virtuele accu het blok `accu`. De backend vraagt HA hooguit eens per 10 s.
+   De instellingen van een gebruiker (tarieven + virtuele accu) zijn pas zichtbaar
+   voor de server, en dus voor het display, nadat die gebruiker de app na deze update
+   één keer heeft geopend (het instellingendocument wordt dan omgezet); daarvoor
+   gebruikt `/signaal` standaardtarieven en geen virtuele accu.
 
 ## Lokaal draaien
 ```bash

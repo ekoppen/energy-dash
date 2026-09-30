@@ -74,10 +74,12 @@ Drempel `drempel_w` (standaard 300 W).
 |---|---|---|
 | `goed_moment` | teruglevering > drempel en de accu kan het niet (volledig) opnemen: vol, of overschot > max vermogen | `#3ec46d` groen |
 | `accu_laadt` | teruglevering > drempel en de accu neemt het op | `#f0a32a` oranje |
-| `accu_ontlaadt` | afname > drempel en de accu levert | `#2f6fed` blauw |
-| `afname` | afname > drempel en de accu is leeg | `#e8654f` rood |
+| `accu_ontlaadt` | afname > drempel en de accu dekt het (rest na de accu ≤ drempel) | `#2f6fed` blauw |
+| `afname` | afname > drempel en wat na de accu overblijft (rest) is > drempel, ook als de accu leeg is | `#e8654f` rood |
 | `rustig` | onder de drempel | `#5d6b78` grijs |
 | `fout` | HA-token geweigerd of HA/apenkaas onbereikbaar | `#5d6b78` grijs |
+
+Voor beide richtingen telt de rest na de accu: is die rest ≤ drempel, dan is het gedekt (of `rustig`), anders blijft het groen (`goed_moment`) resp. rood (`afname`).
 
 Zonder virtuele accu (geen startdatum): alleen `goed_moment` (teruglevering >
 drempel), `afname`, `rustig`, `fout`; het blok `accu` ontbreekt.
@@ -100,7 +102,9 @@ Zonder `startdatum` staat de virtuele accu uit.
 **Leesbaar voor de server.** Het document krijgt `readPermissions:
 ["user:<id>", "app"]`; `writePermissions` blijft `["user:<id>"]`.
 - Nieuwe documenten worden zo aangemaakt (de browser kent `userId` uit de sessie).
-- Apenkaas staat niet toe dat rechten van een bestaand document wijzigen. Een
+- Gebruikers kunnen de rechten van een bestaand document niet wijzigen (alleen de
+  service-role/server kan dat via apenkaas' setDocumentPermissions); daarom zet de
+  browser het om door een kopie te maken. Een
   bestaand document zonder `app` wordt bij het laden omgezet: nieuw document met
   dezelfde data en de juiste rechten aanmaken, daarna het oude verwijderen.
 - De server zoekt het document van gebruiker X door de app-leesbare

@@ -29,6 +29,7 @@ class AccuDienst:
         self._klok = klok
         self._inst: dict[str, tuple[float, dict]] = {}
         self._live: dict[str, tuple[float, dict]] = {}
+        self._live_fout: dict[str, tuple[float, Exception]] = {}
         self._uren: dict[str, tuple[tuple, float, dict]] = {}
 
     async def _instellingen(self, uid: str) -> dict:
@@ -45,7 +46,15 @@ class AccuDienst:
         hit = self._live.get(uid)
         if hit and nu - hit[0] < LIVE_TTL_S:
             return hit[1]
-        data = await self._haal_nu(k)
+        fout = self._live_fout.get(uid)
+        if fout and nu - fout[0] < LIVE_TTL_S:
+            raise fout[1]  # HA was net stuk: niet elke poll opnieuw proberen
+        try:
+            data = await self._haal_nu(k)
+        except Exception as e:
+            self._live_fout[uid] = (nu, e)
+            raise
+        self._live_fout.pop(uid, None)
         self._live[uid] = (nu, data)
         return data
 

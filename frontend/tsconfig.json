@@ -16,5 +16,8 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // Tests draaien in vitest; de productie-build (ook in Docker, context ./frontend) hoeft ze niet te typechecken.
+  // Ze importeren o.a. ../testdata buiten de frontend-map.
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
 }

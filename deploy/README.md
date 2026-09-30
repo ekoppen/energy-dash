@@ -33,6 +33,8 @@ Via de console op http://192.168.178.202:3000/console:
    APENKAAS_TENANT_ID=<tenant-id uit stap 1>
    APENKAAS_SERVER_KEY=<key uit stap 2>
    APENKAAS_KOPPELING_COLLECTION_ID=<uit stap 3>
+   APENKAAS_INSTELLINGEN_COLLECTION_ID=<uit stap 3>
+   APENKAAS_DISPLAY_COLLECTION_ID=<uit stap 3>
    VITE_APENKAAS_URL=http://192.168.178.202:3000   # Apenkaas zoals de BROWSER hem ziet
    VITE_APENKAAS_TENANT_ID=<tenant-id>
    VITE_APENKAAS_INSTELLINGEN_COLLECTION_ID=<uit stap 3>
@@ -41,6 +43,12 @@ Via de console op http://192.168.178.202:3000/console:
    ```
    De CSV-upload en -download gaan via presigned URL's rechtstreeks naar de
    opslag (MinIO) van Apenkaas: die moet dus ook vanuit de browser bereikbaar zijn.
+
+5. **Display (optioneel):** maak op de pagina *Virtuele accu* een display-sleutel.
+   Het display leest `GET /api/signaal` met `Authorization: Bearer <sleutel>`
+   (of `?sleutel=<sleutel>` voor apparaten zonder headers; die vorm kan in de
+   nginx-access-log belanden). Antwoord: `signaal`, `kleur` (hex), `advies`, en
+   bij een virtuele accu het blok `accu`. De backend vraagt HA hooguit eens per 10 s.
 
 ## Lokaal draaien
 ```bash

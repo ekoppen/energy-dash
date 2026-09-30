@@ -108,6 +108,13 @@ async def fetch_hourly_statistics(
                 return res.get("result", {})
 
 
+def start_ms(waarde) -> int:
+    """HA levert 'start' als epoch-milliseconden (nieuw), epoch-seconden of ISO-tekst (oud)."""
+    if isinstance(waarde, (int, float)):
+        return int(waarde if waarde > 1e11 else waarde * 1000)
+    return int(datetime.fromisoformat(str(waarde).replace("Z", "+00:00")).timestamp() * 1000)
+
+
 def combine_import_export(
     stats: dict[str, list[dict]],
     import_ids: list[str],
@@ -115,19 +122,19 @@ def combine_import_export(
     dal_import_ids: list[str] = (),
 ) -> list[dict]:
     """
-    Combineert de per-entiteit buckets tot één reeks {imp, exp, imp_dal} per uur,
+    Combineert de per-entiteit buckets tot één reeks {start_ms, imp, exp, imp_dal} per uur,
     uitgelijnd op starttijd. Ontbrekende waarden tellen als 0. imp_dal is het
     deel van imp dat op het daltarief (P1-teller T1) binnenkwam.
     """
-    def index_by_start(ids: list[str]) -> dict[str, float]:
-        acc: dict[str, float] = {}
+    def index_by_start(ids: list[str]) -> dict[int, float]:
+        acc: dict[int, float] = {}
         for eid in ids:
             for bucket in stats.get(eid, []):
                 start = bucket.get("start")
                 change = bucket.get("change")
                 if start is None or change is None:
                     continue
-                key = str(start)
+                key = start_ms(start)
                 acc[key] = acc.get(key, 0.0) + float(change)
         return acc
 
@@ -139,6 +146,7 @@ def combine_import_export(
     for s in sorted(set(imp_by_start) | set(exp_by_start)):
         imp = max(0.0, imp_by_start.get(s, 0.0))
         records.append({
+            "start_ms": s,
             "imp": imp,
             "exp": max(0.0, exp_by_start.get(s, 0.0)),
             "imp_dal": min(imp, max(0.0, dal_by_start.get(s, 0.0))),

@@ -61,12 +61,27 @@ def test_hours_days_buiten_bereik_422(client, monkeypatch, days):  # noqa: F811
 def test_combine_splits_dal_import_per_hour():
     from ha_stats import combine_import_export
     stats = {
-        "imp_t1": [{"start": 1, "change": 0.4}, {"start": 2, "change": 0.0}],
-        "imp_t2": [{"start": 2, "change": 0.7}],
-        "exp_t1": [{"start": 1, "change": 0.1}],
+        "imp_t1": [{"start": 1_700_000_000_000, "change": 0.4}, {"start": 1_700_003_600_000, "change": 0.0}],
+        "imp_t2": [{"start": 1_700_003_600_000, "change": 0.7}],
+        "exp_t1": [{"start": 1_700_000_000_000, "change": 0.1}],
     }
     records = combine_import_export(stats, ["imp_t1", "imp_t2"], ["exp_t1"], dal_import_ids=["imp_t1"])
     assert records == [
-        {"imp": 0.4, "exp": 0.1, "imp_dal": 0.4},
-        {"imp": 0.7, "exp": 0.0, "imp_dal": 0.0},
+        {"start_ms": 1_700_000_000_000, "imp": 0.4, "exp": 0.1, "imp_dal": 0.4},
+        {"start_ms": 1_700_003_600_000, "imp": 0.7, "exp": 0.0, "imp_dal": 0.0},
     ]
+
+
+def test_start_ms_accepteert_ms_seconden_en_iso():
+    from ha_stats import start_ms
+    assert start_ms(1_700_000_000_000) == 1_700_000_000_000
+    assert start_ms(1_700_000_000.0) == 1_700_000_000_000
+    assert start_ms("2023-11-14T22:13:20+00:00") == 1_700_000_000_000
+    assert start_ms("2023-11-14T22:13:20Z") == 1_700_000_000_000
+
+
+def test_combine_sorteert_numeriek_niet_als_tekst():
+    from ha_stats import combine_import_export
+    stats = {"i": [{"start": 9_999_999_999_000, "change": 1}, {"start": 10_000_000_000_000, "change": 2}]}
+    records = combine_import_export(stats, ["i"], [])
+    assert [r["start_ms"] for r in records] == [9_999_999_999_000, 10_000_000_000_000]
